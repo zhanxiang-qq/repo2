@@ -1,0 +1,371 @@
+1、搭建MySQL数据库服务器
+	1）常见软件
+		主流操作系统：Unix、Linux、Windows
+		
+		软件名		开源	跨平台	厂商
+		Oracle		否	是	甲骨文
+		MySQL		是	是	甲骨文
+		SQL Server	否	否	微软
+		DB2		否	是	IBM
+		Redis		是	是	开源软件
+		Memcached	是	是	开源软件
+		MongoDB	是	是	开源软件
+
+	2）专业术语
+		DB（DataBase）
+			数据库
+			依照某种数据模型进行组织并存放到存储器的数据集合
+		DBMS（DataBase Management System）
+			数据库管理系统
+			用来操纵和管理数据库的服务软件
+		DBS（DataBase System）
+			数据库系统：即DB+DBMS
+			指带有数据库并整合了数据库管理软件的计算机系统
+
+	3）MySQL介绍
+		起源与发展：
+			应用最广泛的开源数据库软件
+				最早属于瑞典的MySQL AB公司
+				2008年1月，MySQL AB被Sun收购
+				2009年4月，SUN被Oracle收购
+			崭新的开源分支MariaDB
+				为应付 MySQL可能会闭源的风险而诞生
+				由MySQL原作者 Widenius主导开发
+				与MySQL保持最大程度兼容
+
+	4）特点与应用
+		主要特点：
+			适用于中小规模，关系型数据库系统
+			支持Linux、Unix、Windows等多种操作系统
+			支持Python、Java、Perl、PHP等编程语言
+		典型应用环境：
+			LAMP平台，与Apache HTTP Server组合
+			LNMP平台，与Nginx组合
+	
+	5）构建MySQL服务
+		环境准备：
+			1、创建一台CentOS系统虚拟机
+			2、关闭firewalld
+			3、禁用SELinux
+			4、配置YUM源
+			5、配置IP地址192.168.4.50（vmnet4）
+			6、安装部署软件mysql-5.7.17.tar
+
+		操作：
+			tar  -xvf  mysql-5.7.17.tar
+			yum  -y  install  mysql-community-*.rpm			
+			systemctl  start   mysqld
+			systemctl  enable  mysqld
+			netstat  -antup  |   grep  :3306
+			ps  -C  mysqld
+
+		相关参数：
+			/etc/my.cnf	主配置文件
+			/var/lib/mysql	数据库目录
+			默认端口号	3306
+			进程名		mysqld
+			传输协议		TCP
+			进程所有者	mysql
+			进程所属组	mysql
+			错误日志文件	/var/log/mysqld.log
+
+	6）初始配置
+		数据库管理员名为root
+			默认仅允许root本机连接
+			首次登陆密码在安装软件时随机生成
+			随机密码存储在日志文件/var/log/mysqld.log里
+			连接命令：mysql  -h数据库地址  -u用户  -p密码
+		grep  password  /var/log/mysqld.log			##查看初始化密码
+		mysql  -hlocalhost  -uroot  -p'密码'			##使用初始化密码登陆数据库
+
+	7）修改root密码
+		alter  user  root@'localhost'  identified  by  '密码'；	##修改root密码
+		exit；
+		mysql  -uroot  -p密码				##使用修改后的密码登陆数据库
+
+	8）修改密码策略
+		LOW(0)		长度
+		MEDIUM(1)	长度、数字、小写/大写、和特殊字符
+		STRONG(2)	长度、数字、小写/大写、和特殊字符、字典文件
+		
+		mysql  -uroot  -p密码				##临时修改密码策略，重启服务后会失效
+		show  variables  like  "%password%";			##查看系统中和密码相关的变量
+		set  global  validate_password_policy=0;			##设置密码策略为LOW，只检验长度
+		set  global  validate_password_length=6;			##设置密码的长度最短为6位
+		show  variables  like  "%password%";
+		
+		vim  /etc/my.cnf					##永久修改密码策略
+		[mysqld]				
+		validate_password_policy=0				##设置密码策略为LOW，只检验长度
+		validate_password_length=6				##设置密码的长度最短为6位
+		:wq
+		systemctl  restart  mysqld
+		mysql  -uroot  -p密码
+		show  variables  like  "%password%";
+
+
+2、数据库基础
+	1）连接MySQL服务
+		连接方式：客户端连接MySQL服务的方法
+			命令行
+			web页面
+			安装图形软件
+			编写脚本（PHP、Java、Python...）
+		使用mysql 命令：
+			mysql  -h服务器IP  -u用户名  -p密码  [数据库名]
+			quit 或 exit 退出
+
+	2）数据存储流程
+		客户端把数据存储到数据库服务器上的步骤
+			连接数据库服务器
+			建库			##相当于创建文件夹
+			建表			##相当于创建文本文件
+			插入记录			##相当于在文件文件中写入内容
+			断开连接			
+	
+	3）MySQL管理环境
+		SQL命令使用规则
+			SQL命令不区分字母大小写（密码，变量值除外）
+			每条SQL命令以；结束
+			默认命令不支持Tab键自动补齐
+			\c 终止sql命令
+
+	4）SQL命令分类
+		管理数据库使用SQL（结构化查询语言）
+		DDL	数据定义语言：如 create、alter、drop
+		DML	数据操作语言：如 insert、update、delete
+		DCL	数据控制语言：如 grant、revoke
+		DTL	数据事务语言：如 commit、rollback、savepoint
+
+	5）MySQL基本操作
+		库管理命令：库类似于文件夹，用来存储表
+		show  databases;		##显示已有的库
+		select  user();		##显示连接用户
+		use  库名；		##切换库
+		select  database();		##显示当前所在的库
+		create  database  库名;	##创建新库
+		show  tables;		##显示已有的表
+		drop  database  库名;	##删除库
+
+		库名的命名规则：
+			仅可以使用数字、字母、下划线、不能纯数字
+			区分字母大小写，具有唯一性
+			不可使用指令关键字、特殊字符
+
+			create  database  DB1;		##创建数据库DB1
+			create  database  db1;		##创建数据库db1
+
+		表管理命令：
+			建表：表用于存储数据文件
+				create  table  库名.表名(
+					字段名1  类型(宽度)，
+					字段名2  类型(宽度),
+					... ...
+				) DEFAULT  CHARSET=utf8;		##指定中文字符，让表支持插入中文
+
+			desc  库名.表名;			##查看表结构
+			drop  table  库名.表名;		##删除表
+			select  *  from  库名.表名;		##查看表记录
+			insert  into  库名.表名  values(值列表);	##插入表记录
+			update  库名.表名  set  字段=值;	##修改表记录
+			delete  from  库名.表名;		##删除表记录
+			show  create  table   表名;		##查看创建表的命令和相关属性
+	
+			
+
+3、数据类型（上）
+	1）信息种类
+		常见的信息种类
+			数值型：体重、身高、成绩、工资
+			字符型：姓名、工作单位、通信住址
+			枚举型：兴趣爱好、性别、专业
+			日期时间型：出生日期、注册时间
+
+	2）字符类型
+		定长 char 类型：
+			最大字符个数255
+			不够指定字符个数时在右边用空格补全
+			字符个数超出时，无法写入数据
+		
+			create  table  db1.t1(
+				name  char(5),
+				homedir  char(50)
+			);
+			insert  into  db1.t1  values("bob","USA");
+			insert  into  db1.t1  values("tom","beijing");	
+
+		变长 varchar 类型：
+			安数据实际大小分配存储空间
+			字符个数超出时，无法写入数据
+			
+		大文本类型：text/blob
+			字符数大于65535存储时使用
+
+			create  table  db1.t2(
+				name  char(5),
+				email  varchar(30)
+			);
+			insert  into  db1.t2  values("lucy","lucy@tedu.cn");
+
+	2）数值类型
+		整数型：只能存整数	
+			类型		名称	有符号范围	无符号范围
+			tinyint		微小整数	-128~127		0~255
+			smallint		小整数	-32768~32767	0~65535
+			mediumint	中整数	-2(23)~2(23)-1	0~2(24)-1
+			int		大整型	-2(31)~2(31)-1	0~2(32)-1
+			bigint		极大整型	-2(63)~2(63)-1	0~2(64)-1
+			unsigned		使用无符号存储范围(相当于把负数全部变成正数，增加正数的范围)
+
+		浮点型：存储有小数点的数
+			类型		名称	有符号范围						无符号范围
+			float		单精度	-3.402823466E+38到-1.175494341E-38				1.175494341E-38到3.402823466E+38
+			double		双精度	-1.7976931348623157E+308到-2.2250738585072014E-308		2.2250738585072014E-308到1.7976931348623157E+308
+			
+			create  table  db1.t4(pay  float(5,2),id double(4,2));
+			insert  into  db1.t4  values(9999,9999);
+			insert  into  db1.t4  values(999.99,99.99);
+
+
+
+4、数据类型（下）
+	1）日期时间类型
+		类型关键字：
+			日期  date
+				范围：0001-01-01~9999-12-31
+				格式：yyyymmdd  19491001
+			
+			年  year
+				范围：1901~2155
+				格式：yyyy  1998  2000
+				
+			时间  time
+				格式：HH:MM:SS
+
+			日期时间  datetime
+				范围：1000-01-01 00:00:00~9999-12-31  23:59:59
+				格式：yyyymmddhhmmss
+			
+			日期时间  timestamp
+				范围：1970-01-01  00:00:00~2038-01-19 00:00:00
+				格式：yyyymmddhhmmss
+
+			时间函数：
+				curtime()		获取当前系统时间
+				curdate()		获取当前的系统日期
+				now()		获取当前系统日期和时间
+				year()		获取年
+				month()		获取月
+				day()		获取日
+				date()		获取日期
+				time()		获取时间
+
+			关于日期时间字段：
+				当未给timestamp字段赋值时，自动以当前系统时间赋值，而datetime值为NULL（空）
+
+			year 类型：
+				要求使用4位数赋值
+				当使用2位数赋值时：01-99
+				01~69视为 2001~2069
+				70~99视为 1970~1999
+
+	2）枚举类型
+		enum 单选：
+			格式：字段名  enum(值1，值2，值N)
+			仅能在列表里选择一个值
+
+		set 多选：
+			格式：字段名  set(值1，值2，值N)
+
+
+5、约束条件、修改表结构
+	1）约束条件
+		查看约束条件：
+			作用：限制字段赋值
+			语法：desc  库名.表名;
+
+		设置约束条件：
+			null		允许为空（默认设置）
+			not  null		不允许为null（空）
+			key		键值类型
+			default		设置默认值，缺省为NULL
+			extra		额外设置
+
+	2）修改表结构
+		语法结构
+			用法：alter  table  库名.表名  执行动作;
+			动作：
+				add	添加字段
+				modify	修改字段类型
+				change	修改字段名
+				drop	删除字段
+				rename	修改表名
+
+		添加字段：
+			新字段默认添加在字段末尾
+			alter  table  库名.表名  add  字段名  类型(宽度)  约束条件   [after  字段名  |  first  ];
+
+		修改字段类型：
+			修改的字段类型不能与已存储的数据冲突
+			alter  table  库名.表名  modify  字段名  类型(宽度)  约束条件   [after  字段名  |  first  ];
+			
+		删除字段：
+			表中有多条记录时，所有列的此字段的值都会被删除
+			alter  table  库名.表名  drop  字段名;
+			alter  table  库名.表名  drop  字段名,drop  字段名;
+		
+		修改字段名：
+			alter  table  库名.表名  change  原字段名  新字段名  类型  约束条件;
+			
+		修改表名：
+			表对应的文件名，也被改编
+			表记录不受影响
+			alter  table  表名   rename   新表名;
+
+
+
+6、普通索引
+	1）键值类型
+		根据数据存储要求，选择键值
+			index		##普通索引，一个表中可以有多个，字段值允许重复，可以为null，标志是MUL
+			unique		##唯一索引，不允许有重复值，比如身份证，银行账号）
+			fulltext		##全文索引，适合在进行模糊查询的时候使用
+			primary  key	##主键，不允许重复，不允许为null，一个表只能有一个primary key字段，标志是PRI
+			foreign  key	##外键，插入记录时，字段值在另一个表字段值范围内选择，必须是innodb存储引擎，字段类型要一致，不能为空值，并且要唯一，被参照字段必须是索引类型的一种，一般是主键
+
+	2）索引介绍
+		索引是什么
+			类似于书的目录
+			对表中字段值进行排序
+			索引算法：Btree、B+tree、hash
+
+	3）索引优/缺点
+		索引优点：
+			可以加快数据的查询速度
+		索引缺点：
+			当对表你的数据进行增加、删除和修改的时候，索引也要动态的调整，降低了数据的维护速度
+			索引需要占物理空间
+
+	4）普通索引 index 使用规则
+		具体要求如下：
+			一个表中可以有多个Index字段
+			字段的值允许重复，且可以赋NULL值
+			index字段  标志是 MUL
+			通常把作为查询条件的字段设置为 index 字段
+	5）创建索引
+		建表时创建 index 索引：
+			create table 库名.表名(字段名1 类型，字段名2 类型，index(字段名1)，index(字段名2))；
+		
+		已有表创建 index 索引：
+			create index 索引名 on 表名(字段名)；
+
+		删除 index 索引：
+			drop index 索引名 on 表名；
+			
+		查看索引详细信息：
+			show  index  from 表名 \G；	##\G代表竖着显示
+		
+
+
+
+			

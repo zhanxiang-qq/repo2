@@ -1,0 +1,304 @@
+1、Ceph概述
+	1）什么是分布式存储
+		分布式是指一种独特的系统架构，它由一组网络进行通信、为了完成共同的任务而协调工作的计算机节点组成
+		分布式系统是为了用廉价的、普通的计算器完成单个计算机无法完成的任务、存储任务
+		其目的就是利用更多的机器，处理更多的数据
+
+	2）常用的分布式文件系统
+		Lustre
+		Hadoop
+		FastDFS
+		Ceph
+		ClusterFS
+
+	3）什么是Ceph
+		ceph是一个分布式文件系统
+		具有高扩展、高可用、高性能的特点
+		ceph可以提供对象存储、块存储、文件系统存储
+		ceph可以提供EB级别的存储空间
+
+	4）ceph组件
+		OSDs：存储设备
+		Monitors：集群监控组件
+		RadosGateway（RGW）：对象存储网关
+		MDSs：存放文件系统的元数据（对象存储和块存储不需要该组件）
+		Clients：ceph客户端
+
+
+2、Ceph实验环境
+	1）环境准备：
+		client  192.168.4.10（添加CD/DVD设备，挂载ceph10.iso）
+		node1  192.168.4.11（添加CD/DVD设备，挂载ceph10.iso、添加sdb和sdc两块20G的磁盘）
+		node2  192.168.4.12（添加CD/DVD设备，挂载ceph10.iso、添加sdb和sdc两块20G的磁盘）
+		node3  192.168.4.13（添加CD/DVD设备，挂载ceph10.iso、添加sdb和sdc两块20G的磁盘）
+	
+	2）搭建基础环境
+		client：挂载系统光盘和ceph10.iso
+			lsblk
+			mkdir  /ceph   /centos
+			vim  /etc/fstab
+			/dev/sr0  /ceph  iso9660  defaults  0  0
+			/dev/sr1  /centos  iso9660  defaults  0  0
+			:wq
+			mount  -a
+			
+		node1：挂载系统光盘和ceph10.iso
+			lsblk
+			mkdir  /ceph   /centos
+			vim  /etc/fstab
+			/dev/sr0  /ceph  iso9660  defaults  0  0
+			/dev/sr1  /centos  iso9660  defaults  0  0
+			:wq
+			mount  -a
+
+		node2：挂载系统光盘和ceph10.iso
+			lsblk
+			mkdir  /ceph   /centos
+			vim  /etc/fstab
+			/dev/sr0  /ceph  iso9660  defaults  0  0
+			/dev/sr1  /centos  iso9660  defaults  0  0
+			:wq
+			mount  -a
+
+		node3：挂载系统光盘和ceph10.iso
+			lsblk
+			mkdir  /ceph   /centos
+			vim  /etc/fstab
+			/dev/sr0  /ceph  iso9660  defaults  0  0
+			/dev/sr1  /centos  iso9660  defaults  0  0
+			:wq
+			mount  -a
+
+		node1：配置yum仓库文件并拷贝给所有主机
+			vim  /etc/yum.repos.d/dvd.repo
+			[dvd]
+			name=dvd
+			baseurl=file:///centos
+			enabled=1
+			gpgcheck=0
+
+			[OSD]
+			name=OSD
+			baseurl=file:///ceph/OSD
+			enabled=1
+			gpgcheck=0
+
+			[MON]
+			name=MON
+			baseurl=file:///ceph/MON
+			enabled=1
+			gpgcheck=0
+
+			[Tools]
+			name=Tools
+			baseurl=file:///ceph/Tools
+			enabled=1
+			gpgcheck=0
+			:wq
+			for  i  in  client  node1  node2  node3
+			do
+				scp   /etc/yum.repos.d/dvd.repo  root@$i:/etc/yum.repos.d/
+			done
+
+		node1：配置所有主机的/etc/hosts域名解析
+			vim  /etc/hosts
+			192.168.4.10  client
+			192.168.4.11  node1
+			192.168.4.12  node2
+			192.168.4.13  node3
+			:wq
+			for  i  in  {10..13}
+			do
+				scp  /etc/hosts  192.168.4.$:/etc/
+			done
+
+		node1：配置node1可以无密码远程所有主机，包括自己
+			ssh-keygen  -f  /root/.ssh/id_rsa  -N  ''
+			for  i   in  {10..13}
+			do
+				ssh-copy-id  192.168.4.$i
+			done
+
+		Client：配置时间服务器，所有node主机与client主机进行时间同步
+			vim  /etc/chrony.conf
+			allow  192.168.4.0/24
+			local  stratum  10
+			:wq
+			systemctl  restart  chronyd
+
+		
+		node1：使用循环关闭所有主机的防火墙和selinux
+			for  i  in  client  node1  node2  node3
+			do
+				ssh  $i  "systemctl   stop  firewalld"
+				ssh  $i  "setenforce  0"
+			done
+			
+		node1：配置时间同步，并同步至其他node主机，然后重启时间服务				
+			vim   /etc/chronyd.conf
+			server  192.168.4.10  iburst
+			:wq
+			for  i  in  node1  node2  node3
+			do
+				scp  /etc/chrony.conf  $i:/etc/
+				ssh  $i  "systemctl  restart  chronyd"
+			done
+
+			
+
+		
+
+3、部署Ceph集群
+	1）node1安装ceph-deploy脚本
+		yum  -y  install  ceph-deploy
+	
+	2）在node1节点上给所有节点安装ceph所有组件
+		for  i  in  node1   node2  node3
+		do
+			ssh  $i  "yum   -y  install   ceph-mon  ceph-osd  ceph-mds  ceph-radosgw"
+		done
+
+	3）在node1初始化MON集群
+		mkdir  ceph-cluster
+		cd  ceph-cluster/
+		ceph-deploy  new  node1  node2  node3
+		ceph-deploy  mon  create-initial
+		ceph  -s
+		
+	4）在node1上对所有节点的磁盘创建分区表
+		cd  ceph-cluster/
+		ceph-deploy  disk  zap  node1:sdb  node1:sdc  node2:sdb  node2:sdc  node3:sdb  node3:sdc
+		
+	5）启动OSD服务、共享OSD磁盘
+		cd  ceph-cluster/
+		ceph-deploy  osd  create  node1:sdc:/dev/sdb
+		ceph-deploy  osd  create  node2:sdc:/dev/sdb
+		ceph-deploy  osd  create  node3:sdc:/dev/sdb
+
+	6）测试集群环境
+		ceph  -s
+		ceph  osd  tree
+
+
+4、Ceph块存储
+	1）在node1节点上创建镜像，共享块存储
+		查看存储池：ceph  osd  lspools
+
+		创建镜像、查看镜像：
+			rbd  create  jacob  --image-feature  layering  --size  10G
+			rbd  create  rbd/nb  --image-feature  layering  --size  10G
+			rbd  list
+			rbd  info  jacob
+		
+		扩容镜像容量：
+			rbd  resize  --size  15G  jacob
+			rbd  info  jacob
+		缩小镜像容量：
+			rbd  resize  --size  7G  jacob  --allow-shrink
+			rbd  info  jacob
+
+	2）在client客户端通过KRBD访问块存储,
+		安装ceph-common软件包访问块存储
+		yum  -y  install  ceph-common
+		
+		拷贝配置文件和密钥（需要知道集群是谁，要有密码访问）
+		scp  192.168.4.11:/etc/ceph/ceph.conf  /etc/ceph/
+		scp  192.168.4.11:/etc/ceph/ceph.client.admin.keyring  /etc/ceph/
+		rbd  map  jacob
+		lsblk
+		rbd  showmapped
+		
+		格式化后写入数据：
+		lsblk
+		mkfs.xfs  /dev/rbd0
+		mkdir  /nsd01
+		mount  /dev/rbd0  /nsd01
+		echo  "test"  > /nsd01/test.txt
+
+	3）node1上创建快照，然后用快照恢复数据
+		rbd  snap  ls  jacob
+		rbd  snap  create  jacob  --snap  jacob-snap1
+		rbd  snap  ls  jacob
+		
+		client模拟删除数据：
+			rm   -rf  /nsd01/test.txt
+			umount  /nsd01
+		
+		node1上回滚快照，恢复数据：
+			rbd  snap  rollback  jacob  --snap  jacob-snap1
+			mount  /dev/rbd0  /nsd01/
+			ls  /nsd01/
+
+	4）客户端卸载磁盘
+		umount   /nsd01/
+		rbd  showmapped
+		rbd  unmap  /dev/rbd0
+
+	5）集群节点中删除镜像：
+		先删除镜像的快照，然后再删除镜像：
+			rbd  snap remove jacob --snap jacob-snap1
+			rbd  remove  jacob
+
+
+5、Ceph文件系统
+	1）什么是文件系统
+		块（裸设备）：没有格式化的设备
+		文件系统：ext3、ext4、xfs、Fat32、NTFS...
+		一个文件系统是由inode和block两部分组成
+		inode：存储文件的描述信息（metadata）
+		block：存储真正的数据
+
+	2）创建ceph文件系统存储
+		node1上启动MDS服务：
+			cd  ceph-cluster/
+			ceph-deploy  mds  create  node3
+			
+		node1上创建存储池:
+			ceph  osd  pool  create  cephfs_data  64
+			ceph  osd  pool  create  cephfs_metadata  64
+		
+		node1上创建ceph文件系统：
+			ceph  fs  new  myfs1  cephfs_metadata  cephfs_data
+			ceph  fs  ls
+			
+	3）客户端挂载使用：
+		mkdir  /nsd02
+		临时挂载：mount  -t  ceph  192.168.4.11:6789:/   /nsd02  -o  name=admin,secret=AQBi2OReGk7vEBAAPRDjbtbuZgwV8wulGIx/5g==
+		高可用方案：mount  -t  ceph  192.168.4.11:6789,192.168.4.12:6789,192.168.4.13:6789:/   /nsd02  -o  name=admin,secret=AQBi2OReGk7vEBAAPRDjbtbuZgwV8wulGIx/5g==
+
+		永久挂载：开机自动挂载
+			yum  -y  install  libcephfs1
+			vim  /etc/fstab
+			192.168.4.11:6789,192.168.4.12:6789,192.168.4.13:6789:/   /nsd02   ceph   defaults,_netdev,name=admin,secret=AQBi2OReGk7vEBAAPRDjbtbuZgwV8wulGIx/5g==   0   0
+
+
+
+6、Ceph对象存储
+	1）什么是对象存储
+		也就是键值存储，通过其API接口指令，也就是简单的GET、PUT、DEL和其他扩展，向存储服务上传下载数据
+		对象促成农户中所有数据都被认为是一个对象，所以，任何数据都可以存入对象存储服务器，如图片、视频、音频等
+		RGW是Ceph对象存储网关，提供RESTful API访问接口
+
+	2）启动RGW服务
+		在node1上通过ceph-deploy启动node3 的RGW服务：
+			cd  /root/ceph-cluster
+			ceph-deploy  rgw  create node3
+		
+		登录node3，修改配置文件，修改默认端口
+			vim  /etc/ceph/ceph.conf
+			[client.rgw.nod3]
+			host = node3
+			rgw_frontends = "civetweb port=8000"
+			:wq
+
+			systemctl  status  ceph-radosgw@rgw.node3
+			ss   -antup  | grep  :8000
+
+	3）客户端测试：
+		curl 192.168.4.13:8000
+
+		或安装s3cmd进行访问测试：
+			s3cmd支持GET下载、PUT上传、DEL删除操作
+
+			http://rpmfind.net/linux/rpm2html/search.php?query=s3cmd
+

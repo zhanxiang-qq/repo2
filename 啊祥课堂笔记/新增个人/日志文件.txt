@@ -1,0 +1,10 @@
+/var/log/messages     记录内核消息、各种服务公共消息
+/var/log/dmsg            系统启动过程的各种消息
+/var/log/cron              计划任务相关的消息
+/var/log/maillog          邮件收发相关消息
+/var/log/secure            与访问限制相关的安全消息
+
+日志消息优先级：   八个级别
+0-3
+4-
+5-7

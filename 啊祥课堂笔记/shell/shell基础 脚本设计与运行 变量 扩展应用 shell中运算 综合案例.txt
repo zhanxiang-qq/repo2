@@ -1,0 +1,347 @@
+﻿1、Shell 基础
+	1）什么是Shell？
+		Shell是用户与Linux内核之间的解释器
+		计算机硬件 —》操作系统内核 —》命令解释器 —》用户 | 应用程序
+		
+		解释器作用：负责将用户的指令翻译为操作系统内核可以识别的指令（二进制文件，也就是0和1的组合）
+，然后操作系统内核再去执行相应的指令，最终将结果再反馈给我们的用户
+
+		修改用户登陆的解释器：可以通过usermod、chsh命令修改用户登陆的解释器
+			usermod   -s   解释器   用户名
+			chsh   -s   解释器	用户名
+		
+		常见的Shell解释器
+			/bin/bash
+			/bin/sh
+			/sbin/nologin
+			/bin/csh
+			/bin/tcsh
+                                                        ksh  
+		查看当前系统有哪些解释器：
+			cat   /etc/shells
+
+		Bash解释器的基本特性：
+			支持快捷键、支持 Tab 键补齐
+			支持历史命令（history）
+			支持命令别名（alias）
+			支持输入和输出重定向（>、>>、2>、2>>、&>、&>>）
+				>：覆盖输出正确的信息
+				>>：追加输出正确的信息
+				2>：覆盖输出错误的信息
+				2>>：追加输出错误的信息
+				&>：覆盖输出正确和错误的信息
+				&>>：追加输出正确和错误的信息
+			支持管道（ | ）：将前面命令的输出结果作为后面命令的参数
+
+		Shell执行命令的方式：
+			交互式（命令行）：
+				特点是需要人工干预
+				逐条解释执行的时候很慢，效率也很低
+			
+			非交互式（脚本）：
+				需要提前设计脚本中的内容
+				可以实现批量执行、效率很高
+
+2、Shell 脚本的设计与运行
+	1）什么是 Shell 脚本
+		提前将执行的命令语句写入一个文件
+		然后解释器会逐行按顺序去解释执行这些代码指令
+
+	2）常见的脚本语言
+		Shell 脚本
+		Python/Perl/Ruby脚本
+		JSP/PHP脚本
+		...
+
+	3）编写一个 Shell 脚本的思路
+		第一需要新建一个文件
+		第二需要添加执行的语句（命令）
+		第三需要给文件添加 x 可执行权限
+		
+	4）规范脚本的构成	
+		#! 脚本声明（指定使用哪种解释器解释代码）
+		#  注释信息（步骤、思路、用途等），以 # 开头的为注释信息，没有实际的作用，不会被执行
+		可执行语句（真正执行的代码命令）
+
+		vim  /root/shell/day01/test01.sh
+		#!/bin/bash
+		#这是一个测试脚本
+		echo  "Hello World"
+                            
+
+	5）执行脚本的多种方式
+		方式一：需要为文件赋予可执行的权限（带有 x 执行权限的文件是绿色，没有 x 执行权限的文件是黑色）
+			绝对路径执行
+			相对路径执行
+		方法二：不需要文件有可执行的权限
+			bash | sh | ksh    脚本文件名		##都会开启新的子进程，可以通过pstree进行查看
+			source 或  .    脚本文件名		##不会启动子进程，可以通过 pstree 查看进程树
+	6）调试shell脚本
+                                主要途径：
+                                     直接观察执行中的输出、报错信息
+                                     通过sh -x 开启调试模式
+                                     在可能出错的地方设置echo
+                 7）字符串切片
+             ${parameter:offset}
+             ${parameter:offset:length}
+             截取从offset个字符开始，向后length个字符	
+                 8） 替换字符串 
+                格式：${parameter/pattern/string} 
+                      # VAR='hello world world!' 
+                     将第一个 world 字符串替换为 WORLD： 
+                      # echo ${VAR/world/WORLD} 
+                        hello WORLD world! 
+                      将全部 world 字符串替换为 WORLD： 
+                      # echo ${VAR//world/WORLD} 
+                         hello WORLD WORLD! 
+                         替换正则匹配为空：
+                      # VAR=123abc  
+                      # echo ${VAR//[^0-9]/} 
+                          123
+                       # echo ${VAR//[0-9]/} 
+                           abc 
+patterm 前面开头一个正斜杠为只匹配第一个字符串，两个正斜杠为匹配所有字
+再介绍下字符串输出颜色，有时候关键地方需要醒目，颜色是最好的方式：
+                 9）字体颜色 字体背景颜色 显示方式 
+                       30：黑 31：红 32：绿 33：黄 34：蓝色 35：紫色 36：深绿 37：白色 
+                       40：黑 41：深红 42：绿 43：黄色 44：蓝色 45：紫色 46：深绿 47：白色 
+                        0：终端默认设置 1：高亮显示 4：下划线 5：闪烁 7：反白显示 8：隐藏 格式： 
+                        \033[1;31;40m  # 1 是显示方式，可选。31 是字体颜色。40m 是字体背景颜色。
+                        \033[0m     # 恢复终端默认颜色，即取消颜色设置
+                    10）取消显示
+                                例： yum -y install httpd &> /dev/null
+3、常用的 Shell 变量
+	1）自定义变量（用户自主定义）
+		以固定名称，存放可以变化的值
+		定义变量的格式：
+			变量名=变量值
+		取消变量的格式：
+			unset  变量名
+		
+		查看变量的语法格式：
+			echo  $变量名
+			echo  ${变量名}
+
+		注意事项：=号两边不能有空格，不要使用关键字做变量名，如ls、cd等命令
+			如果变量名已经存在则覆盖之前的变量值
+			变量名称可以由 字母/数字/下划线组成，不能以数字开头
+		0
+
+
+	2）环境变量（变量名通常大写，由操作系统维护）
+		变量定义都存储在/etc/profile 或 ~/.bash_profile
+		命令 env 可以列出所有环境变量
+		命令 set 可以显示系统所有的变量 
+		常见环境变量：
+			PATH、PWD、USER、UID、HOME、SHELL
+			PATH：命令搜索路径
+			PWD：显示当前工作目录
+			USER：显示当前登陆的用户名
+			UID：显示当前用户的UID
+			HOME：显示当前用户的家目录
+			SHELL：显示当前正在使用的解释器
+
+			echo  $PATH
+			echo  $PWD
+			echo  $USER
+			...
+		
+	3）位置变量（bash内置变量，存储脚本执行时的参数）
+		使用 $n 表示，n 为数字序列号
+		$1、$2、... 、${10}、${11}、...
+
+		vim  /root/shell/day01/test02.sh
+		#!/bin/bash
+		echo $2
+		echo $1
+		echo $3
+		echo $4
+		echo $1
+		echo $1
+
+		执行脚本，查看结果：
+			cd  /root/shell/day01/
+			bash  test02.sh   abc  efg  xyz  123
+		
+
+	4）预定义变量（bash内置变量，可以调用但是不能赋值或修改）
+		主要是用来保存脚本程序的执行信息，包括可以直接使用这些变量
+		$0：当前所在的进程或脚本名
+		$$：当前脚本运行的进程PID号
+		$?：判断上一条命令执行后的返回状态，0表示正常，1或其他值表示异常
+		$#：已加载的位置变量的个数
+		$*：所有位置变量的值
+
+		$?测试和使用：如果$?的值为0，就代表上一条指令是成功的，如果不为0就代表上一条指令是失败的
+			ls  /root 
+			echo $?
+			ls   12347124123.txt
+			echo $?
+
+		其他预定义变量的测试和使用：
+			vim  /root/shell/day01/pre.sh
+			#!/bin/bash
+			echo $0
+			echo $$
+			echo $#
+			echo $*
+			echo $1
+			echo $2
+			echo $3
+			echo $4
+			
+
+			测试，然后查看结果：
+				cd   /root/shell/day01/pre.sh
+				bash  pre.sh   abc  efg  xyz  123
+
+
+
+4、变量的扩展应用
+	1）多种引号的区别
+		双引号 ""：允许扩展，可以用 $ 符号引用其他比变量（第一个作用：会把双引号内的内容作为一个整体；第二个作用：允许在双引号内调用变量，并且不会屏蔽变量的值）
+		单引号 ' ' ：禁用扩展，即便 $ 也视为普通字符（第一个作用：会把单引号内的内容作为一个整体；第二个作用：不允许在单引号内调用变量，而且会屏蔽变量的值，把变量变为普通的字符）
+		反引号（反撇号） ` ` ：将命令的执行输出结果作为变量值，$() 与反引号等效
+
+		touch  a  b  c
+		ls  -l
+		touch  "a  b  c"
+		ls  -l
+		rm  -rf  a   b  c
+		ls  -l
+		rm  -rf  "a  b  c"
+		touch   'a  b  c'
+		ls  -l
+		rm  -rf  'a  b  c'
+		
+		a=123
+		echo  "$a"
+		echo  '$a'
+		
+		a=`cat   /etc/hosts`
+		echo  $a
+		a=$(cat  /etc/passwd)
+		echo  $a
+
+	2）read 命令定义变量
+		read 标准输入取值
+			格式：read [ -p "提示信息" ]   变量名
+			-p可选项，可以写一些提示用户的信息
+			-t 可指定命令的超时秒数
+			-s 设置是否在终端显示输入的内容	
+			
+		vim  /root/shell/day01/read.sh
+		#!/bin/bash
+		read  -p  "请输入一个用户名："  username
+		read  -p  "请输入一个密码："  password
+		useradd  $username
+		echo  $password  |  passwd  --stdin  $username
+
+	3）全局变量和局部变量
+		局部变量：新定义的变量默认只在当前 shell 环境中有效，无法在子shell环境中使用
+		全局变量：新定义的变量默认在所有 shell 环境中有效
+			定义全局变量：export  变量名=变量值
+			取消全局变量：export  -n  变量名	
+
+5、Shell 中的运算
+	1）$[] 或 $(()) 或 let 进行整数算式运算
+		$[] 格式：$[整数1  运算符  整数2]
+		$(()) 格式：$((整数1  运算符  整数2))
+		let 格式：let  整数1  运算符  整数2
+		
+		echo  $[1+2]
+		echo  $[2*3]
+		echo  $[10-5]
+		echo  $[10/2]
+		echo  $[10/3]
+		echo  $[10%2]
+		echo  $[10%3]
+		x=5
+		y=3
+		echo  $[x+y]
+		echo  $[x*y]
+		echo  $[x/y]
+		echo  $[x-y]
+		echo  $[x%y]
+		echo  $((x+y))
+		echo  $((x*y))
+			
+		let  a=1+1
+		echo $a
+		let  a=2*3
+		echo  $a
+	
+	2）变量的自增/减等操作
+		i++	i=i+1
+		i--	i=i-1
+		i+=2	i=i+2
+		i-=2	i=i-2
+		i*=2	i=i*2
+		i/=2	i=i/2
+		i%=2	i=i%2
+
+		i=1
+		let i++		##等同于 i=i+1
+		echo  $i
+		let  i--		##等同于 i=i-1
+		echo  $i
+		let  i+=2		##等同于 i=i+2
+		echo  $i
+		let  i*=2		##等同于 i=i*2
+		echo  $i
+
+	3）bc 计算器进行小数运算
+		bc 支持交互式和非交互式两种计算方式
+		scale=n 可以约束小数位（scale只对除法、取余、乘幂有效，比如乘法、加法、减法就无效）
+		quit 退出交互式计算
+		bc 支持的比较操作符：>、>=、<、<=、==、!=		##表达式成立则返回1，否则返回0
+
+		echo  "1+1" | bc
+		echo  "1+2;2*3" | bc
+		echo  "scale=4;10/3"  | bc
+		echo  "scale=4;10/3;100/7"  | bc
+
+		echo  "1>2"  | bc
+		echo  "2>=2" | bc
+		echo  "2<2" | bc
+		echo  "2!=2"  | bc
+
+6、脚本综合案例
+	1）监控脚本之显示硬件信息
+		echo -n 选项：不换行输出
+		echo -e 选项：支持扩展属性
+			echo  -e  "\033[32mOK\033[0m"
+
+	2）监控硬件信息
+                                服务器硬件信息
+                                网卡信息
+                                剩余内存容量信息如下
+                                磁盘容量信息
+                                CPU信息
+		vim  /root/shell/day01/info.sh
+		#!/bin/bash
+		echo  -e  "\033[34m-------服务器硬件信息-------\033[0m"
+		echo  -e  "\033[32m网卡信息如下：\033[0m"
+		ifconfig  ens33 | grep  "inet"
+		echo  -e  "\033[32m剩余内存容量信息如下：\033[0m"
+		grep  MemAvailable  /proc/meminfo
+		echo  -e  "\033[32m磁盘容量信息如下：\033[0m"
+		df  -h  /
+		echo  -e  "\033[32mCPU信息如下：\033[0m"
+		grep  "model  name"  /proc/cpuinfo
+
+	3）计算练习
+		1、和数运算
+		2、三角形面积计算
+		3、梯形面积计算
+		4、圆形面积
+	
+	4）使用 shell 脚本实现自动配置YUM源
+		vim  /root/shell/day01/yum.sh
+		#！/bin/bash
+		URL=file:///dvd
+		echo "[centos]
+		name=centos
+		baseurl=$URL
+		enabled=1
+		gpgcheck=0‘’> /etc/yum.repos.d/dvd.repo

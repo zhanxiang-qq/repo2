@@ -1,0 +1,241 @@
+1、iptables 简介
+	1）启动iptables防火墙
+		RHEL7默认使用firewalld作为防火墙
+		但firewalld底层还是调用包过滤防火墙iptables
+		
+		systemctl  stop  firewalld			##关闭禁用firewalld防火墙
+		systemctl  disable  firewalld
+		yum  -y  install  iptables-services		##安装iptables软件包
+		systemctl  start  iptables			##启动iptables服务
+
+	2）iptables的表、链结构
+		filter表（过滤表）：INPUT、OUTPUT、FORWARD
+		nat表（地址转换表）：PREROUTING、POSTROUTING、OUTPUT
+		mangle表（包标记表）：PREROUTING、POSTROUTING、INPUT、OUTPUT、FORWARD
+		raw表（状态跟踪表）：PREROUTING、OUTPUT
+
+	3）包过滤匹配流程
+		顺序匹配，匹配即停止（LOG除外）
+		若无任何匹配，则按该链的默认策略处理
+
+	4）iptables基本用法
+		管理程序位置：/sbin/iptables
+		指令组成：iptables  [-t  表名]  选项  [链名]  [条件]  [-j  目标操作]
+		
+		iptables  -t  filter  -I INPUT  -p  icmp  -j  REJECT		##拒绝所有主机的ping操作
+		iptables  -nL					##查看filter表的规则
+		iptables  -F					##清空filter表的规则
+		iptables  -t  filter  -I INPUT  -p  icmp  -j  DROP		##丢弃所有主机的ping数据包
+		
+
+2、iptables 基础
+	1）iptables使用注意事项/整体规律
+		可以不指定表，默认为filter表
+		可以不指定链，默认为对应表的所有链
+		如果没有匹配的规则，则使用防火墙默认规则
+		选项/链名/目标操作用大写字母，其余都小写
+
+	2）基本的目标操作
+		ACCEPT：允许通过/放行
+		DROP：直接丢弃，不给出任何回应
+		REJECT：拒绝通过，必要时会给出提示
+		LOG：只负责记录日志，后续规则可以继续匹配
+
+	3）常用的管理选项
+		添加规则：-A：在链的末尾追加一条规则
+			 -I：再链的开头（或指定序号）插入一条规则
+		查看规则：-L：列出所有的规则条目
+			 -n：以数字的形式显示地址、端口等信息
+			 --line-numbers：查看规则时，显示规则的序号
+		删除规则：-D：删除链内指定序号（或内容）的一条规则
+			 -F：清空所有的规则
+		默认策略：-P：为指定的链设置默认规则
+
+	4）使用LOG目标操作
+		iptables  -I  INPUT  -p  icmp  -j  LOG		##匹配到是icmp协议的数据包的时候，不做拒绝，也不做允许，只做日志的记录
+		tailf  /var/log/messages
+		
+		使用192.168.4.6ping测试
+
+	5）添加新的规则
+		-A：末尾追加规则
+		-I：首行（或指定行）插入规则
+		-p：指定协议名
+		-j：指定目标操作（ACCEPT、DROP、REJECT、LOG）
+		
+		iptables  -t  filter  -A  INPUT  -p  tcp   -j  ACCEPT		##在末尾行添加一条规则，允许所有TCP访问
+		iptables  -I  INPUT  -p  udp  -j  ACCEPT			##在行首添加一条规则，允许所有的UDP访问
+		iptables  -I  INPUT  2  -p  icmp  -j  ACCEPT		##在指定的第二行添加一条规则，允许所有ICMP访问
+
+	6）查看规则列表
+		iptables  -nL					##查看filter表所有规则
+		iptables  -nL  INPUT				##查看filter表的INPUT链的所有规则
+		iptables  -t  filter  -nL  INPUT				##查看filter表的INPUT链的所有规则
+		iptables  -nL  INPUT  --line-numbers	   		##查看filter表的INPUT链的所有规则，并显示规则序号
+		iptables  -t  filter  -nL  INPUT	--line-numbers		##查看filter表的INPUT链的所有规则，并显示规则序号
+
+	7）删除、清空规则
+		iptables  -D  INPUT  1		##删除filter表的INPUT链的第一条规则
+		iptables  -nL			##查看规则
+
+		iptables  -F			##清空filter表所有的规则
+		iptables  -t  nat  -F			##清空nat表所有的规则
+		iptables  -t  raw  -F			##清空raw表所有的规则
+		iptables  -t  mangle  -F		##清空mangle表所有的规则
+
+	8）设置默认规则
+		所有链的初始默认规则均为ACCEPT
+		通过 -P 选项可重置默认规则
+		默认规则只支持ACCEPT和DROP，不支持REJECT和LOG
+
+		iptables  -t  filter  -P  INPUT  DROP	##设置filter表INPUT链的默认策略规则为DROP
+		
+		回到vmware虚拟机：
+			iptables  -t  filter  -nL  INPUT			##查看规则
+			iptables  -F				##清空所有规则
+			iptables  -t  filter  -P  INPUT  ACCEPT		##把INPUT链的默认规则再设置为允许所有
+
+
+
+3、iptables防火墙匹配条件
+	1）基本的匹配条件
+		通用匹配：
+			可直接使用，不依赖于其他条件或扩展
+			包括网络协议、IP地址、网络接口等条件
+		隐含匹配：
+			要求以特定的协议匹配作为前提
+			包括端口、TCP标记、ICMP类型等条件
+
+		通用匹配：
+			协议匹配：-p  协议名
+			地址匹配：-s  源地址、-d  目标地址
+			接口匹配：-i  收数据的网卡、-o  发数据的网卡
+		隐含匹配：
+			端口匹配：--sport  源端口、--dport  目标端口
+			ICMP类型匹配：--icmp-type  ICMP类型
+
+			需要取反条件时：用叹号 ！取反
+
+	2）封禁IP地址/网段
+		限制特定的IP或网段的访问
+			iptables  -A  INPUT  -s  192.168.4.120  -j  DROP		##丢弃源地址是192.168.4.120的主机的数据包
+			iptables  -A  INPUT  -s  10.0.10.0/24  -j  DROP		##丢弃源地址是10.0.10.0/24网段的所有主机的数据包
+			iptables  -nL
+
+	3）保持特定网络服务
+		限制对指定服务端口的访问
+			iptables  -A  INPUT  -s  192.168.168.0/24  -p  tcp  --dport  22  -j  ACCEPT		##允许源地址是192.168.168.0/24网段的主机访问本机的22端口
+			iptables  -A  INPUT  -s  220.181.78.0/24  -p  tcp  --dport  22  -j  ACCEPT		##允许源地址是220.181.78.0/24网段的主机访问本机的22端口
+			iptables  -A  INPUT  -p  tcp  --dport  22  -j  DROP				##丢弃其他所有主机访问本机22端口的数据包
+
+	4）禁用ping相关策略处理
+		ping的工作流程：A-->B
+			A给B发送ping请求的数据包，B收到请求后，会给A响应数据包
+			请求ping的icmp类型：echo-request
+			响应ping的icmp类型：echo-reply
+
+		允许本机ping其他主机，但是，禁止其他主机ping本机：
+			第一种方式：
+				iptables  -A  INPUT  -p  icmp  --icmp-type  echo-request  -j  DROP		##丢弃其他主机给我发的echo-request类型的ping请求数据包
+				iptables  -A  INPUT  -p  icmp  ! --icmp-type  echo-request  -j  ACCEPT		##允许其他主机向我回应不是echo-request类型的ping响应数据包
+			第二种方式：
+				iptables  -A  INPUT  -p  icmp  --icmp-type  echo-request  -j  DROP		##丢弃其他主机给我发的echo-request类型的ping请求数据包
+				iptables  -A  INPUT  -p  icmp  --icmp-type  echo-reply  -j  ACCEPT		##允许其他主机向我回应的echo-reply类型的ping响应数据包
+			第三种方式：
+				iptables  -A  OUTPUT  -p  icmp  --icmp-type  echo-request  -j  ACCEPT		##允许本机向外发送ping请求的echo-request数据包
+				iptables  -A  OUTPUT  -p  icmp  ! --icmp-type  echo-request  -j  DROP		##不允许本机向外发送不属于ping请求的echo-request数据包
+			第四种方式：
+				iptables  -A  OUTPUT  -p  icmp  --icmp-type  echo-request  -j  ACCEPT		##允许本机向外发送ping请求的echo-request数据包
+				iptables  -A  OUTPUT  -p  icmp  --icmp-type  echo-reply  -j  DROP		##拒绝本机向外发送ping请求的echo-reply数据包
+
+
+
+4、主机型/网络防火墙
+	1）实验环境准备
+		client：vmnet4（IP：192.168.4.100、网关：192.168.4.5）
+		proxy：vmnet4（192.168.4.5）
+		            vmnet2（192.168.2.5）
+		            开启路由转发功能：echo  "net.ipv4.ip_forward=1" >> /etc/sysctl.conf ; sysctl  -p
+		web1：vmnet2（IP：192.168.2.100、网关：192.168.2.5）
+
+	2）web1配置web服务
+		yum  -y  install  httpd
+		echo  "test  page"  >  /var/www/html/index.html
+		systemctl  restart   httpd
+		iptables  -F
+		setenforce  0
+
+		测试：使用 client 访问 web1 的 httpd 服务
+
+	3）设置防火墙规则
+		proxy主机上操作：
+			systemctl  stop  firewalld
+			setenforce  0
+			iptables  -A  FORWARD  -s  192.168.4.100  -p  tcp  --dport  80  -j  REJECT
+
+		测试：使用 client 访问 web1 的 httpd 服务，访问会被拒绝
+
+
+
+5、扩展匹配规则
+	1）扩展规则的基本语法
+		-m  扩展模块  --扩展条件   条件值
+
+	2）常见的扩展条件类型
+		MAC地址匹配	-m  mac  --mac-source  MAC地址
+		多端口匹配	-m  multiport  --sports  源端口列表
+				-m  multiport  --dports  目标端口列表
+		IP范围匹配	-m  iprange  --src-range  IP1-IP2
+				-m  iprange  --dst-range  IP1-IP2
+
+	3）根据MAC地址封锁主机
+		适用于交换网络，针对源MAC地址
+		
+		proxy主机上操作：
+			iptables  -A  INPUT  -m  mac  --mac-source  00:0C:29:74:BE:21  -j  REJECT
+		
+	4）多端口案例
+		一条规则可以开发多个端口，比如同时开发Web、FTP、Mail、SSH等
+		
+		proxy主机上操作：
+			iptables  -A  INPUT  -p  tcp  -m  multiport  --dports  20:22,25,80,110,2000:3000   -j  ACCEPT
+
+	5）根据IP范围封锁主机
+		允许从 192.168.4.240-192.168.4.254 登录
+		禁止从 192.168.4.0/24 网段的其他主机登录
+
+		proxy主机上操作：
+			iptables  -A  INPUT  -p  tcp  --dport  22  -m  iprange  --src-range  192.168.4.240-192.168.4.254  -j  ACCEPT
+			iptables  -A  INPUT  -p  tcp  --dport  22  -s  192.168.4.0/24   -j  REJECT
+
+
+
+6、NAT应用案例
+	1）SNAT源地址转换
+		修改数据包的源地址
+		仅用于nat表的POSTROUTING链
+
+	2）实验环境：
+		porxy：vmnet0（桥接模式），配置访问外网
+	 	            vmnet2（192.168.2.5）
+		            开启路由转发
+		web1：vmnet2（IP：192.168.2.100、网关：192.168.2.5、DNS：8.8.8.8）
+
+	3）配置SNAT共享上网
+		配置的关键策略：选择路由之后，针对来自局域网、即将从外网接口发出去的包，将源地址修改为网关的公网IP地址
+	
+		proxy上操作：
+			iptables  -t  nat  -A  POSTROUTING  -s  192.168.2.0/24  -j  SNAT  --to-source   网关外网IP
+
+		测试：web1  ping测试www.baidu.com
+
+	4）地址伪装策略，共享动态公网IP地址实现上网
+		主要针对外网接口的IP地址不固定的情况
+		将SNAT改为MASQUERADE即可
+		对于ADSL宽带拨号连接，网络接口可写为 ppp+
+
+		proxy上操作：
+			iptables  -t  nat  -A  POSTROUTING  -s  192.168.2.0/24  -j  MASQUERADE
+		
+		测试：web1  ping测试www.baidu.com
+

@@ -1,0 +1,190 @@
+1、rsync基本使用
+	1）Remote Sync，远程同步
+		作用：支持本地复制，或与其它ssh，rsync主机同步
+			主要用于进行数据同步
+
+	2）rsync同步操作
+		命令用法：rsync   [选项...]   源目录    目标目录
+		同步与复制的差异：
+			复制：完全拷贝源到目标
+			同步：增量拷贝，只传输变化过的数据
+
+		常用同步控制选项：
+			-n：测试同步过程，不做实际修改
+			--delete：删除目标文件夹内多余的文档
+			-a：归档模式，相当于-rlptgoD，保留所有原有属性进行同步
+			-v：显示详细操作信息
+			-z：传输过程中启用压缩/解压
+
+		本地同步：
+			rsync   [选项...]   本地目录1    本地目录2			##将本地目录1同步到本地目录2
+			rsync   [选项...]   本地目录1/   本地目录2			##将本地目录1下的内容同步到本地目录2
+
+		rsync + ssh 同步：（服务端需要开启ssh服务，并提供用户和密码）
+			与远程的 SSH目录保持同步
+			rsync   [...]   user@host:远程目录   本地目录
+			rsync   [...]   本地目录    user@host:远程目录
+
+
+mkdir /nsd20
+mkdir /todir
+cp /etc/passwd /etc/hosts /etc/resolv.conf /etc/redhat-release /nsd20/
+ls /nsd20/
+rsync -av /nsd20 /todir/ 
+ls /todir/
+rsync -av /nsd20/ /todir/ 
+ls /todir/
+rsync -av --delete /nsd20/ /todir/ 
+ls /todir/
+mkdir /nsd20/abc
+ls /nsd20/
+rsync -avn --delete /nsd20/ /todir/ 
+ls /todir/
+rsync -av --delete /nsd20/ /todir/ 
+ls /todir/
+pc207上创建一个目录：mkdir  /pc207
+rsync -av /nsd20/ root@192.168.4.207:/pc207
+mkdir /svr7
+rsync -av  root@192.168.4.207:/pc207/  /svr7/
+ls /svr7/
+
+
+
+2、inotify 实时监控
+	1）同步的实时性：
+		实现无密码验证：
+			ssh-keygen			##一路回车
+			ssh-copy-id  root@192.168.4.207
+			ls  /root/.ssh
+			rsync  --delete  -avz  /nsd20/    root@192.168.4.207:/pc207
+			
+		按照固定周期定期进行同步：
+			时间间隔不好固定，不同不及时或资源浪费
+			实时性较差
+
+		Linux 内核的 inotify 机制：
+			提供事件响应式的文件系统通知机制
+			安装 inotify-tools 控制工具可调用此机制实现监控
+
+	2）安装 inotify-tools 工具
+		源码包编译安装即可：
+			tar -xf /root/tools.tar.gz 
+			cd /root/tools/
+			tar -xf inotify-tools-3.13.tar.gz 
+			cd inotify-tools-3.13/
+			yum -y install gcc make	##开发工具，用于编译安装
+			./configure		##配置环境
+			make 			##编译
+			make install		##安装
+
+		基本用法：inotifywait   [选项]   目标文件夹
+
+		常用选项：
+			-m：持续监控（捕获一个事件后不退出）
+			-r：递归监控、包括子目录及文件
+			-q：减少屏幕输出信息
+			-e：指定监视的 modify、move、create、delete、attrib 等事件类别
+
+			inotifywait    -rq   /nsd20			##只捕获一次事件后自动退出程序
+			inotifywait    -mrq  -e  modify,create,delete  /nsd20	##使用 -e 选项指定监控的事件
+			inotifywait    -mrq   /nsd20			##不加 -e选项，默认监控所有事件
+			测试：再开一个终端，在 /nsd20目录中创建删除修改，查看inntifywait终端的一个输出信息
+			
+
+
+3、同步脚本书写
+	1）inotify 与 rsync 的结合
+		基本思路：利用 while 循环来反复检查单次监控结果
+		
+		运用格式：
+		while  inotifywait监控操作
+		do
+			需要执行的操作
+		done		
+
+	2）实现从本地到远程的 Web 目录推送：
+		本地的 /var/www/html 同步到 远程主机的 /var/www/html
+		vim  /root/rsync.sh
+		while  inotifywait  -rqq  /var/www/html		##当inotify 监控到目录发生变化时，就去执行 rsync 进行数据同步
+		do
+        			rsync  -a  /var/www/html/  root@192.168.4.207:/var/www/html
+		done
+		:wq
+		chmod  +x   /root/rsync.sh		##赋予脚本可执行权限
+		/root/rsync.sh  &			##执行脚本并且放入后台执行
+
+		测试：虚拟机A另开一个终端，在监控的目录下修改或创建新的文件，然后去虚拟机B上检测是否同步
+		
+
+4、Cobbler 概述
+	1）基本概念：
+		Cobbler 是一款快速的网络系统部署工具
+		集中管理所需服务，如DHCP、TFTP、WEB
+		Cobbler 内部集成了一个镜像版本仓库
+		Cobbler 内部集成了一个ks应答文件仓库
+		Cobbler 还提供了包括yum源管理、Web界面管理、API接口、电源管理等功能
+
+	2）搭建 Cobbler 装机平台
+		解压 Cobbler.zip 包：
+			unzip   /root/Cobbler.zip  -d  /		##指定解压到根下
+			cd  /Cobbler/
+			ls
+			unzip   /Cobbler/cobbler.zip   -d  /opt/		##指定解压到/opt下
+			ls  /opt/cobbler
+		
+		安装 cobbler 主程序、工具包：
+			yum  -y  install  dhcp   httpd  mod_ssl		##安装工具包和依赖包
+			yum  -y  install  /opt/cobbler/*.rpm
+			rpm  -q  cobbler
+		
+		配置主配置文件：
+			vim  /etc/cobbler/settings
+			server： 192.168.4.207	##设置本机为cobbler服务器
+			next_server： 192.168.4.207	##设置下一个服务器还是本机
+			manage_dhcp： 1		##设置cobbler管理dhcp服务
+			pxe_just_once： 1		##防止客户端重复安装操作系统
+
+		配置cobbler 的dhcp：
+			vim  /etc/cobbler/dhcp.template
+			:%s/192.168.1/192.168.4/g		##全文替换，将1.0网段改成4.0网段
+
+		部署引导文件：
+			tar   -xPf  /cobbler/cobbler_boot.tar.gz		## P 以压缩包的绝对路径进行解压
+			ls   /var/lib/cobbler/loaders/
+		
+		启动所有服务：
+			systemctl  restart   cobblerd
+			systemctl  restart   httpd
+			systemctl  restart   tftp
+			systemctl  restart   rsyncd
+			
+		检测刷新 cobbler 配置：
+			setenforce   0
+			cobbler  sync	##检测所有配置是否正确
+		
+			***TASK  COMPLETE***	##最后看到这个就是正确的
+
+
+5、Cobbler 使用
+	1）Cobbler 导入镜像内容
+		格式：cobbler  import  --path=挂载点   --name=导入系统命名（随意起）
+			mkdir  /dvd
+			mount  /dev/cdrom  /dvd
+			cobbler  import  --path=/dvd  --name=Centos7.5
+		
+		导入成功后，cobbler 导入的镜像放在：/var/www/cobbler/ks_mirror
+
+		查看 cobbler 可用于网络安装的系统有哪些：
+			cobbler  list
+		
+		从 cobbler 中删除系统：
+			cobbler  list 
+			cobbler  profile  remove  --name=CentOS7.5-x86_64		##删除菜单信息
+			cobbler  distro  remove  --name=CentOS7.5-x86_64		##删除镜像信息
+
+		安装好的系统：root密码默认是 cobbler 
+
+
+6、安装红帽8操作系统
+	安装操作和 7 版本一模一样，按照7的操作即可
+

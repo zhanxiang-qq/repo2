@@ -1,0 +1,353 @@
+1、监控概述
+	1）监控的目的
+		报告系统运行状况：
+			每一部分必须同时监控
+			内容包括吞吐量、反应时间、使用率等
+		提前发现问题：
+			进行服务器性能调整前，知道调整什么
+			找出系统的瓶颈在什么地方
+
+	2）监控的资源类别
+		公开数据：
+			Web、FTP、SSH、数据库等应用服务
+			TCP或UDP端口
+		私有数据：
+			CPU、内存、磁盘、网卡流量等使用信息
+			用户、进程等运行信息
+
+	3）监控软件
+		ps		##查看系统进程
+		uptime		##查看CPU的1、5、15分钟平均负载
+		free		##查看磁盘内存和交换空间的使用情况
+		swapon  -s	##查看交换空间
+		df  -h		##查看磁盘空间
+		ifconfig		##查看网卡信息，入站和出站流量
+		netstat 或 ss	##查看网络连接状态信息
+		ping		##查看是否可以同信，网络的延迟
+		traceroute	##追踪路由信息
+		iostat		##查看磁盘分区的读写速度（安装sysstat）
+		sar		##可以查看系统的各项性能指标（安装sysstat）
+				sar  -u  1  3	##每隔1秒查看一次CPU的情况，总共查看3次
+				sar  -n  DEV  1  3	##每隔1秒查看一次网卡的情况，总共查看3次
+
+	4）自动化监控系统
+		Cacti：基于SNMP协议的监控软件，强大的绘图能力
+		Nagios：基于Agent监控，强大的状态检查与报警机制
+			插件极多，自己写监控脚本潜入到Nagios非常方便
+		Zabbix：基于多种监控机制，支持分布式监控
+
+	5）Zabbix简介
+		Zabbix是一个高度集成的监控解决方案
+		可以实现企业级的开源分布式监控
+		Zabbix通过C/S模式采集监控数据
+		Zabbix通过B/S模式实现Web管理
+
+	6）监控服务器和被监控主机
+		监控服务器：
+			监控服务器可以通过SNMP或Agent采集数据
+			数据可以写入MySQL、Oracle等数据库中
+			服务器使用LNMP实现Web前端的管理
+		被监控主机：
+			被监控主机需要安装Agent
+			常见的网络设备一般支持SNMP
+
+
+2、安装前准备：
+	1）环境准备
+		监控服务器：
+			主机名：zabbixserver
+			IP地址：192.168.2.5
+			关闭防火墙和SELinux
+			需要使用Web页面操作，部署LNMP平台
+		监控客户端：
+			主机名：web1和web2
+			IP地址：192.168.2.100、192.168.2.200
+			关闭防火墙和SELinux
+
+	2）部署LNMP
+		安装Nginx及其依赖包：
+			yum  -y  install  gcc  pcre-devel  openssl-devel  make
+			tar  -xf  nginx-1.16.1.tar.gz
+			cd  nginx-1.16.1
+			./configure  --with-http_ssl_module
+			make  &&  make  install
+			yum  -y  install  php  php-mysql  php-fpm  mariadb  mariadb-server  mariadb-devel
+			vim  /usr/local/nginx/conf/nginx.conf
+			fastcgi_buffers 8 16k;		##缓存php生成的页面内容，8个16K
+        			fastcgi_buffer_size 32k;		##缓存php生成的头部信息
+        			fastcgi_connect_timeout 300;		##链接PHP的超时时间
+        			fastcgi_send_timeout 300;		##发送请求的超时时间
+        			fastcgi_read_timeout 300;		##读取请求的超时时间
+        			location ~ \.php$ {
+            				root           html;
+            				fastcgi_pass   127.0.0.1:9000;
+            				fastcgi_index  index.php;			
+            				include        fastcgi.conf;
+        			}
+			:wq
+			systemctl  start  mariadb
+			systemctl  start  php-fpm
+			/usr/local/nginx/sbin/nginx
+			cat  /usr/local/nginx/html/test.php
+			<?php
+			$i=33;
+			echo $i;
+			?>
+			:wq
+			systemctl  stop  firewalld
+			setenforce  0
+			
+		真机浏览器访问测试：http://192.168.2.5/test.php
+
+
+
+3、安装Zabbix
+	1）部署Zabbix监控端服务器
+		安装源码Zabbix
+			yum  -y  install  net-snmp-devel  curl-devel  libevent-devel
+			tar  -xf  zabbix-3.4.4.tar.gz
+			cd  zabbix-3.4.4
+			./configure  --enable-server  			##安装部署zabbix服务端软件
+				--enable-proxy  			##安装部署zabbix代理相关软件
+				--enable-agent  			##安装部署zabbix被监控端软件
+				--with-mysql=/usr/bin/mysql_config	##存放数据库的基本信息，告诉zabbix数据库的配置文件在哪里
+				--with-net-snmp  			##允许zabbix通过snmp协议监控其他设备
+				--with-libcurl			##让zabbix可以通过curl命令连接http等服务，测试被监控主机服务的状态
+			make  install
+			ls  /usr/local/etc/
+			ls  /usr/local/bin/
+			ls  /usr/local/sbin/
+
+		初始化准备，创建数据库与数据库账户
+			mysql
+			create  database  zabbix  character  set  utf8;
+			grant  all  on  zabbix.*  to  zabbix@'localhost'  identified  by  'zabbix';
+			cd  database/mysql/
+			mysql  -uzabbix  -pzabbix  zabbix  <  schema.sql
+			mysql  -uzabbix  -pzabbix  zabbix  <  images.sql
+			mysql  -uzabbix  -pzabbix  zabbix  <  data.sql
+
+		上线Zabbix页面：
+			cd  ..
+			cd  frontends/php/
+			cp  -a  *  /usr/local/nginx/html/
+			chmod  -R  777  /usr/local/nginx/html/*
+			
+		安装依赖软件：
+			yum  -y  install  php-gd  php-xml  php-ldap  php-bcmath  php-mbstring
+			
+		修改PHP配置文件：
+			vim  /etc/php.ini
+			date.timezone = Asia/Shanghai	##设置时区
+			max_execution_time = 300		##最大执行时间，秒
+			post_max_size = 32M		##POST数据最大容量
+			max_input_time = 300		##服务器接收数据的时间限制
+			:wq
+			systemctl  restart  php-fpm
+
+		初始化页面：
+			填写数据库登录地址
+			填写数据库端口号
+			填写数据库名
+			填写数据库用户
+			填写数据库用户密码
+			
+			默认登陆用户名：admin
+			默认登陆密码：zabbix
+			设置中文环境：设置成Chinese(en_GB)
+		
+		修改监控端配置文件：
+			vim  /usr/local/etc/zabbix_server.conf
+			DBHost=localhost		##数据库主机地址
+			DBName=zabbix		##设置数据库名称
+			DBUser=zabbix		##设置数据账户
+			DBPassword=zabbix	##设置数据库密码
+			LogFile=/tmp/zabbix_server.log	##设置日志
+			
+		启动服务：
+			useradd  zabbix		##不创建用户无法启动服务
+			zabbix_server		##启动监控服务
+			zabbix_agentd		##启动被监控服务
+			netstat  -utnlp  |  grep  :10051	##查看监控端服务端口
+			netstat  -utnlp  |  grep  :10050	##查看被监控端服务端口
+	
+		开机自启：将zabbix_server设置为开机自启动
+			echo  zabbix_server  >>  /etc/rc.local
+			echo  zabbix_agentd  >>  /etc/rc.local
+			chmod  +x  /etc/rc.local
+
+	2）部署Zabbix被监控端服务器
+		配置被监控主机Web1：
+			安装软件：
+				yum  -y  install  gcc   pcre-devel  autoconf
+				tar  -xf  zabbix-3.4.4.tar.gz
+				cd  zabbix.3.4.4/
+				./configure  --enable-agent
+				make  install
+				ls  /usr/local/etc/
+				ls  /usr/local/bin/
+				ls  /usr/local/sbin/
+				
+			修改配置文件：
+				vim  /usr/local/etc/zabbix_agentd.conf
+				Server=127.0.0.1,192.168.2.5		##允许访问服务地址列表
+				ServerActive=192.168.2.5:10051	##监控服务器IP地址
+				LogFile=/tmp/zabbix_agentd.log	##日志文件
+
+
+			启动服务：
+				useradd  zabbix
+				zabbix_agentd
+				netstat  -utnlp  |  grep  :10050
+
+			开机自启：
+				echo  zabbix_agentd  >>  /etc/rc.local
+				chmod  +x  /etc/rc.local
+		
+			关闭防火墙和SELinux：
+				systemctl  stop  firewalld
+				setenforce  0
+
+		配置被监控主机Web2：
+			安装软件：
+				yum  -y  install  gcc   pcre-devel  autoconf
+				tar  -xf  zabbix-3.4.4.tar.gz
+				cd  zabbix.3.4.4/
+				./configure  --enable-agent
+				make  install
+				ls  /usr/local/etc/
+				ls  /usr/local/bin/
+				ls  /usr/local/sbin/
+				
+			修改配置文件：
+				vim  /usr/local/etc/zabbix_agentd.conf
+				Server=127.0.0.1,192.168.2.5		##允许访问服务地址列表
+				ServerActive=192.168.2.5:10051	##监控服务器IP地址
+				LogFile=/tmp/zabbix_agentd.log	##日志文件
+
+
+			启动服务：
+				useradd  zabbix
+				zabbix_agentd
+				netstat  -utnlp  |  grep  :10050
+
+			开机自启：
+				echo  zabbix_agentd  >>  /etc/rc.local
+				chmod  +x  /etc/rc.local
+
+			关闭防火墙和SELinux：
+				systemctl  stop  firewalld
+				setenforce  0
+
+
+4、基础监控
+	1）添加监控主机
+		Host是监控的基本载体
+		Zabbix所有监控都是基于Host
+		通过Configuration——》Hosts——》Create Host创建
+
+		根据提示输入：
+			Host name
+			Visible name
+			Group in groups
+			IP address
+			其他默认即可
+		
+	2）为主机添加监控模板
+		在“Templates”模板选项卡页面中
+		找到 Link new templates，select 选择合适的模板添加
+		选择Template OS Linux模板
+		
+	3）查看监控数据
+		可以点击“Monotoring”——》“Latest data”
+		在过滤器中填写条件，根据群组和主机搜索即可
+		找到需要的数据，点击后面的Graph
+
+
+5、自定义监控
+	1）自定义key
+		被监控端主机修改Agent配置文件：
+			vim  /usr/local/etc/zabbix_agentd.conf
+			UnsafeUserParameter=1
+			Include=/usr/local/etc/zabbix_agentd.conf.d/
+
+		创建自定义key：
+			cd  /usr/local/etc/zabbix_agentd.conf.d/
+			vim  count.line.passwd
+			UserParameter=count.line.passwd,sed  -n  '$='  /etc/passwd
+			:wq
+
+			vim  /tmp/usercount.sh
+			#!/bin/bash
+			who | wc -l
+			:wq
+			vim  usercount.line
+			UserParameter=usercount.line,/tmp/usercount.sh
+			:wq
+			
+		重启Agentd：
+			yum  -y  install  psmisc
+			killalll  zabbix_agentd
+			zabbix_agentd
+			
+		测试自定义key是否生效：
+			zabbix_get  -s  127.0.0.1  -k  count.line.passwd
+			zabbix_get  -s  127.0.0.1  -k  usercount.line
+		
+	2）创建监控模板
+		选择Configuration——》Templates创建模板
+		设置模板名称和组的名称
+			Template name
+			Visible name
+			New group
+
+	3）创建应用集
+		模板添加后，默认模板中没有任何应用、项目、触发器、图形等
+		点击模板后面的Application，刷新出的页面选择Create Application
+		设置Application name，点击Add
+	
+
+	4）创建监控项目
+		Configuration——》Templates——》Items——》Create item
+		设置项目参数：
+			项目名称
+			自定义key（必须与配置文件中的key一致）
+			应用集选择刚刚创建的应用
+
+	5）创建图形
+		与监控项目类似，为监控数据创建图形
+		设置图形参数：
+			填写名称
+			图形名称
+			添加监控项目
+
+	6）将模板关联主机
+		Configuration——》Hosts——》选择主机
+		点击Templates，select选项监控项目，add添加
+		添加完成后，点击Update更新主机配置
+		点击Monitoring——》Craphs——》选择条件按查看图形
+
+
+6、拓扑图与聚合图形
+	1）拓扑图
+		绘制拓扑图可以快速了解服务器架构
+		Monitoring——》Maps（拓扑图）
+		选择默认的Local network，编辑即可
+		也可以选择自己创建一个空的拓扑图，自己命名和设置拓扑的大小
+		操作说明：
+			Icon（图标）：添加新的设备后可以点击图标修改属性
+			Shape（形状）
+			Link（连线）：先选择两个图标，再选择连线
+			完成后，点击Update（更新拓扑）
+
+	2）聚合图形
+		在一个页面显示多个数据图表，方便了解多组数据
+		Monitoring——》Screens（聚合图形）——》Create screen
+			Owner：使用默认的Admin用户
+			Name：名称设置为Web1
+			Columns：列数设置为2列
+			Rows：行数设置为4行
+		选择刚刚创建的聚合图形（web1）
+		点击后面的构造函数
+			点击（change）更改，设置每行每列需要显示的数据图表		
+	

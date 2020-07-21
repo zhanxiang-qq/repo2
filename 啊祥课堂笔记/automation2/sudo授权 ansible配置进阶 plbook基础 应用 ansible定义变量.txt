@@ -1,0 +1,349 @@
+1、sudo 提权
+	1）基本概念：给普通用户授权以后，普通用户就可以以超级管理管理员root的身份或其他人的身份去执行命令
+		
+	2）基本流程
+		管理员需要先授权（修改/etc/sudoers文件）
+		普通用户以sudo的形式执行命令
+		可以通过sudo -l 查看授权情况
+           reset 命令行重置   which 命令：查看命令所在位置
+	3）sudoers 文件语法
+		格式：用户或组   主机列表=(提权身份)  [NOPASSWD]:命令列表
+		注意：组需要加%，命令列表要写绝对路径
+
+	4）配置sudo提权
+		ansible  all -m  user  -a "name=alice password={{'123456'} | password_hash('sha512')}}"		##创建一个alice用户，密码为123456
+		
+		ansible  all -m lineinfile  -a  "path=/etc/sudoers  line='alice  ALL=(ALL)  NOPASSWD:ALL'"	##使用sudo执行命令无需输入密码
+		ssh  alice@node1
+		sudo  -l
+		sudo  systemctl  restart  httpd
+
+2、Ansible 配置进阶
+	1）主配置文件（使用alice普通用户执行ansible 的命令）  （inventory  库存）-
+		vim  /root/ansible/ansible.cfg
+		[defaults]
+		inventory = /root/ansible/hosts	
+		remote_user = alice		##以什么用户远程被管理主机      remote_user 远程用户
+		[privilege_escalation]
+		become = true			##是否需要切换用户
+		become_mothod = sudo		##如何切换用户
+		become_user = root		##切换成什么用户
+		become_ask_pass = no		##sudo是否需要输入密码
+
+	2）配置SSH密钥（使用alice远程被管理主机，需要提前配置SSH免密）
+		for  i  in  node1 node2 node3 node4 node5
+		do
+			ssh-copy-id  alice@$i
+		done
+		ansible  all -m command  -a "who"
+                可以针对特殊的主机做特殊配置
+
+3、Ansible Playbook基础
+	1）Playbook语法格式
+		playbook采用YAML格式编写
+         yaml格式
+          一般第一行为三个横杠
+         区分大小写、扩展名为yml、yaml
+         跨行数据需要使用>或者|（|保留换行
+                                playbook文件中由一个或多个play组成
+		每个play中可以包含：
+			hosts（主机）、tasks（任务）
+			variables（变量）、roles（角色）、handlers等元素组成
+		使用ansible-playbook命令运行playbook剧本
+		
+		hosts由一个或多个组或主机组成，逗号分隔
+		tasks由一个或多个任务组成，多个任务按顺序执行
+		可以使用-f选项自定义并发量
+修改vim配置，开启自动缩进对其，缩进宽度为2个空格
+      vim ~/.vimrc  
+autocmd File Type yaml setlocal ai ts=2 sw=2 et
+		
+	2）playbook案例
+案例1：
+vim  /root/ansible/ping01.yml
+---
+- hosts: all
+   tasks:
+     - name: this is my first playbook
+        ping:
+
+案例2：
+vim  /root/ansible/ping02.yml
+---
+- hosts: test,webserver
+   tasks:
+      - name: ping
+         ping:
+      - name: run a shell command
+         shell: touch ~/shell.txt
+ ansible-playbook ~/ansible/test.yml  -f  5  并发连接数
+
+案例3：
+vim  /root/ansible/ping03.yml
+---
+- hosts: all
+   tasks:
+      - name: this is a ping
+         ping:
+      - name: this is a shell
+         shell: who
+- hosts: node1
+   tasks:
+      - name: yum install vsftpd
+         ping:
+
+	3）修改vim配置
+		使用2个空格自动替换tab键
+			tabstop=2、expandtab
+		开启自动缩进对齐，缩进宽度为2个空格
+			shiftwidth=2
+		vim  /root/.vimrc
+		autocmd  FileType  yaml  setlocal  ai  ts=2  sw=2  et
+
+
+4、Ansible Playbook应用案例（上）
+
+案例1：编写playbook，创建系统账户、账户属性、设置密码
+vim  /root/ansible/user-johnd.yml
+---
+- hosts: webserver
+   tasks:
+      - name: create new user 'johnd'
+         user:
+             name: johnd
+             uid: 1040
+             group: daemon
+             password: "{{'123'|password_hash('sha512')}}"
+
+案例2：编写playbook，创建系统账户、账户属性、设置密码
+vim  /root/ansible/user-james.yml
+---
+- hosts: webserver
+   tasks:
+       - name: create new user 'james'
+          user:
+              name: james
+              shell: /bin/bash
+              groups: bin,adm
+              password: "{{'123'|password_hash('sha512')}}"
+
+案例3：编写playbook，删除系统账户johnd
+vim  /root/ansible/del-johnd.yml
+---
+- hosts: webserver
+   tasks:
+       - name: delete user 'johnd'
+          user:
+              name: johnd
+              state: absent
+              remove: yes
+
+案例4：编写playbook完成逻辑卷的划分
+vim  /root/ansible/lvs.yml
+---
+- hosts: node1
+   tasks:
+       - name: create a new primary partition with a size of 1GiB
+          parted:
+              device: /dev/sdb
+              number: 1
+              state: present
+              part_end: 1GiB
+       - name: create a two primary partition with a size of 2GiB
+          parted:
+              device: /dev/sdb
+              number: 2
+              state: present
+              part_start: 1GiB
+              part_end: 3GiB
+      - name: create a vg to /dev/sdb1
+         lvg:
+            vg: myvg
+            pvs: /dev/sdb1
+      - name: create a lvs to myvg of size 512m
+         lvol:
+            lv: mylv
+            vg: myvg
+            size: 512m
+删除分区： parted  /dev/sdb1 rm 1
+                 parted /dev/sdb2 rm 2
+案例5：编写playbook完成安装软件、升级软件、安装组包
+vim  /root/ansible/package.yml
+---
+- hosts: webserver
+   tasks:
+       - name: install a list of packages
+          yum:
+              name:
+                   - httpd
+                   - mariadb
+                   - mariadb-server
+      - name: install the 'Development tools' package group
+         yum:
+             name: "@Development tools"
+      - name: update software
+         yum:
+             name: '*'
+             state: latest
+user parted lvg lovl  yum 模块
+
+5、Ansible Playbook应用案例（下）
+	1）特殊模块 setup
+		ansible_facts用于采集被管理设备的系统信息
+		所有收集的信息都被保存在变量中
+		每次执行playbook默认第一个任务就是Gathering Facts
+		使用setup模块可以查看收集到的facts信息
+
+		ansible  node1  -m  setup
+		ansible  node1  -m  setup  -a  "filter=ansible_all_ipv4_addresses"
+	
+	2）特殊模块 debug	
+		可以显示setup中变量的值，可以辅助排错
+		debug模块有两个参数，var   和      msg（引用时需要用 {{}} ）
+		
+案例：编写查看指定facts信息的playbook
+vim  /root/ansible/debug.yml
+---
+- hosts: node1
+   tasks:
+       - debug:
+              var: ansible_all_ipv4_addresses
+       - debug:
+              msg: "主机名是：{{ansible_hostname}}"
+       - debug:
+              msg: "总内容大小是：{{ansible_memtotal_mb}}"
+       - debug:
+              var: ansible_devices.sdb.partitions.sdb1.size
+
+
+6、Ansible定义变量
+	1）定义变量的方式（根据优先级排序）
+		Inventory变量（在主机清单配置文件中定义变量）
+		Host Facts变量
+		Register变量
+		Playbook变量
+		Playbook提示变量
+		变量文件
+		命令行变量
+
+2）变量应用案例
+案例1：Inventory变量
+vim  /root/ansible/hosts
+[test]
+node1 myvar1="hello the world" myvar2="content"
+[proxy]
+node2
+[webserver]
+node[3:4]
+[database]
+node5
+[cluster:children]
+webserver
+database
+[webserver:vars]
+yourname="jacob"
+
+vim /root/ansible/inventory_var.yml
+---
+- hosts: node1
+  tasks:
+    - name: create a file with var.
+      shell: echo {{ myvar1 }} > /tmp/{{ myvar2 }}
+- hosts: webserver
+  tasks:
+    - name: create a user with var.
+      user:
+        name: "{{ yourname }}"
+
+
+案例2：Host Facts变量
+vim /root/ansible/facts_var.yml
+---
+- hosts: node1
+  tasks:
+    - name: use facts info.
+      copy:
+        content: "{{ansible_hostname}}:{{ansible_bios_version}}"
+        dest: /tmp/facts.txt
+
+案例3：Register变量
+vim /root/ansible/register.yml
+---
+- hosts: node1
+  tasks:
+    - name: save shell result to a variable
+      shell: hostname
+      register: myvar
+    - name: print the variable value through debug
+      debug:
+        msg: "{{myvar.stdout}}"
+
+
+案例4：Playbook变量
+vim /root/ansible/playbook_var.yml
+---
+- hosts: node1
+  tasks:
+  vars:
+    iname: heal
+    ipass: '123456'
+  tasks:
+    - name: use variable create user
+      user:
+        name: "{{iname}}"
+        password: "{{ipass | password_hash('sha512')}}"
+
+案例5：Playbook提示变量  vars 变量
+vim /root/ansible/prompt_var.yml
+---
+- hosts: node1             private （私有的，隐私）
+  vars_prompt:  （变量提示）
+    - name: iname
+      prompt: "请输入用户名"
+      private: no
+    - name: ipass
+      prompt: "请输入密码"
+      private: yes
+  tasks:
+    - name: create a user
+      user:
+        name: "{{iname}}"
+        password: "{{ipass | password_hash('sha512')}}"
+
+案例6：变量文件    单独定义变量文件，在playbook中调用
+vim /root/ansible/variables.yml
+---
+iname: cloud
+ipass: '123456'
+
+vim /root/ansible/file_var.yml
+---
+- hosts: node1
+  vars_files: /root/ansible/variables.yml
+  tasks:
+    - name: create a user.
+      user:
+        name: "{{iname}}"
+        password: "{{ipass | password_hash('sha512')}}"
+
+案例7：命令行变量        （执行ansible命令时使用-e参数定义变量）
+vim /root/ansible/command_var.yml
+---
+- hosts: node1
+  tasks:
+    - name: create user
+      user:
+        name: "{{iname}}"
+        password: "{{ipass | password_hash('sha512')}}"
+
+ansible-playbook command_var.yml -e iname="beth" -e ipass="123456"
+
+总结
+    sudo  让普通用户可以提权执行管理员命令 修改sudoers配置
+   ansible配置进阶
+         修改配置文件。设置ssh远程管理的账户
+        修改inventory主机清单文件
+  ansible playbook
+         将任务剧本提前以yaml格式写入文件
+         ansible自动按照剧本的要求完成对应任务
+ ansibl定义变量的多种方式

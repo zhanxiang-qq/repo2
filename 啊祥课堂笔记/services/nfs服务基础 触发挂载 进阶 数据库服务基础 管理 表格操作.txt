@@ -1,0 +1,258 @@
+1、NFS服务基础
+	1）NFS共享概述，网络文件系统
+		用途：为客户机共享使用的文件夹
+		协议：NFS、RPC
+		所需软件包：nfs-utils
+		系统服务：nfs-server
+
+	2）搭建NFS服务端，进行文件共享
+		修改  /etc/exports 配置文件
+		格式：共享文件夹路径    客户机地址(权限)
+		      vim  /etc/exports
+		      /public      192.168.4.0/24(ro)
+		      :wq
+		      systemctl   restart   nfs-server
+
+	3）客户端访问NFS共享服务
+		列出有哪些NFS共享资源
+			showmount  -e   NFS服务器地址
+		手动挂载NFS共享
+			mount   服务器地址:文件夹共享绝对路径   挂载点
+		开机挂载配置  /etc/fstab
+			服务器地址:文件夹共享绝对路径   挂载点   nfs   defaults,_netdev  0  0
+
+	4）NFS服务端和客户端的搭建的实际操作
+		服务端：
+			systemctl status nfs-server
+			vim /etc/exports
+			/test    192.168.4.0/24(ro)
+			:wq
+			systemctl restart nfs-server
+			mkdir /test
+			echo wo shi svr7 > /test/1.txt
+		客户端：
+			showmount  -e   192.168.4.7
+			mkdir  /mnt/nfsmnt
+			mount  192.168.4.7:/test   /mnt/nfsmnt
+			df
+			ls  /mnt/nfsmnt
+			cat  /mnt/nfsmnt/1.txts
+			umount  /mnt/nfsmnt 
+			vim  /etc/fstab
+			192.168.4.7:/test    /mnt/nfsmnt   nfs  defaults,_netdev   0  0 
+			mount  -a
+			df
+			ls  /mnt/nfsmnt/
+			cat  /mnt/nfsmnt/1.txt
+
+
+2、autofs 触发挂载
+	1）什么是触发挂载
+		由 autofs 服务提供的“按需访问”机制
+		只要访问挂载点，就会触发响应，自动挂载指定设备
+		闲置超过时限（默认5分钟）后，会自动卸载
+	
+	2）autofs 配置解析
+		主配置文件 /etc/auto.master
+			监控点目录   挂载配置文件的编写路径
+		挂载配置文件，比如 /etc/auto.misc
+			触发点子目录    -挂载参数    :设备名
+
+	3）autofs 搭建实际操作：
+		主配置文件：
+			vim  /etc/auto.master
+			/nsd2002    /etc/nsd.conf
+			:wq
+			vim   /etc/nsd.conf
+			mkfs.ext4   /dev/sdb1
+			nsd01    -fstype=ext4    :/dev/sdb1
+			:wq
+			systemctl   restart  autofs
+			ls   /nsd2002/nsd01
+
+			
+			vim  /etc/auto.master
+			/nsd2003    /etc/nsd02.conf
+			:wq
+			vim   /etc/nsd02.conf
+			mkfs.xfs  /dev/sdb2
+			nsd02    -fstype=xfs    :/dev/sdb2
+			:wq
+			systemctl   restart  autofs
+			ls   /nsd2003/nsd02
+
+
+
+3）触发挂载进阶
+	autofs & NFS
+		主配置文件 /etc/auto.master
+			监控点目录  挂载配置文件的路径
+		挂载配置文件，比如 /etc/auto.misc
+			触发点子目录    -挂载参数	NFS服务器地址:共享文件名
+
+
+	NFS & autofs实际操作：
+		操作1：客户端：
+			vim  /etc/auto.master
+			/autonfs   /etc/autonfs.conf
+			:wq
+			vim    /etc/autonfs.conf
+			autonfs   -fstype=nfs   192.168.4.7:/test
+			:wq
+			systemctl   restart   autofs
+			ls  /autonfs
+			ls  /atuonfs/autonfs
+			cat  /autonfs/autonfs/1.txt
+			
+		操作2：服务器：
+			vim   /etc/exports
+			/public   *(ro)
+			mkdir   /public
+			echo   public  >   /public/abc.txt
+			:wq
+		            客户端：
+			vim   /etc/auto.master
+			/public    /etc/public.conf
+			:wq
+			vim   /etc/public.conf
+			pub   -fstype=nfs   192.168.4.7:/public
+			:wq
+			systemctl   restart  autofs
+			ls   /public
+			ls   /public/pub 
+			cat   /public/pub
+
+
+4、数据库服务基础
+	1）什么是数据库
+		DB：数据库，一批数据的集合，主流的数据库多用来存放关系型表格数据
+		关系型数据：以二维表格记录大量实体的属性信息
+		DBMS：数据库管理系统，用来操作和管理数据库的大型软件平台
+		
+		数据库软件（Mariadb）——》数据库（nsd、mysql...）——》数据表格——》真实的数据
+
+	2）常见的关系型数据库管理系统
+		微软的 SQL Server
+		IBM的 DB2
+		甲骨文的 Oracle、MySQL
+		社区开源版 MariaDB
+
+	3）部署mariadb数据库服务器
+		mariadb-server：提供服务端有关的系统程序
+		mariadb：提供客户端及管理工具
+		服务名：mariadb
+		默认端口号：3306
+		
+		yum  -y  install  mariadb-server
+
+	4）访问mariadb数据库
+		使用 mysql 命令，登陆交互界面，实现数据库管理
+		格式：mysql  [-u用户名]   [-p[密码]]
+		
+		登陆数据库：mysql  -uroot		
+		列出数据库：show  databases;
+		退出数据库：quit;			##exit也可以退出数据库
+
+5、基础管理操作
+	1）为数据库账号修改密码
+		格式：mysqladmin  [-u用户名]  [-p[旧密码]]  password  '新密码'
+		数据库管理员root：账户信息存放在mysql库中的user表
+		系统管理员root：账户信息存放在/etc/passwd
+
+		mysqladmin  -uroot  password  "456"			##给root用户添加密码456
+		mysql  -uroot  -p456				##使用新添加的密码登陆数据库
+		mysqladmin  -uroot  -p456  password  "123"		##修改root用户的密码
+		mysql  -uroot  -p123				##使用修改后的密码登陆数据库
+		
+		
+	2）数据库的增删查
+		列出数据库：show  databases;
+		使用/选择数据库：use  数据库名;
+		列出库里有哪些表：show  tables;
+		创建数据库：create  database  数据库名;
+		删除数据库：drop   database   数据库名;
+
+		create  database  abc;			##创建一个数据库叫abc
+		drop  database  abc;			##删除数据库abc
+		show  databases;				
+		create database  nsd;			##创建数据库nsd
+		show  database;
+		use  nsd;					##切换到nsd数据库
+		use  mysql;				##切换到mysql数据库
+		show  tables;				##查看当前数据库下有哪些表
+		
+	3）数据库的导入操作
+		格式：mysql  [-u用户名]  [-p[密码]]  数据库名  <  备份文件.sql
+		
+			mysql  -uroot  -p123  nsd  <  /root/users.sql		##导入数据
+			mysql  -uroot  -p123  				
+			show  databases;
+			use  nsd;
+			show  tables;
+		
+	4）用户授权设置
+		格式：grant  权限列表   on  数据库名.表名   to   用户名@客户机地址   identified  by  '密码';
+
+		grant select on nsd.* to lisi@localhost identified by "123";		##添加一个授权用户lisi，使用本地登陆的方式具有对nsd库所有表拥有查询权限，lisi用户的密码是123
+		mysql  -ulisi  -p123						##使用lisi用户登陆测试
+		show  databases;
+		use  nsd;
+		show  tables;
+		
+		权限列表：select（查询）、update（修改）、delete（删除）、insert（添加）......
+			all（包含增删改查所有权限）
+
+
+6、表格的基本操作
+	1）查询表记录
+		select  *  from  [数据库.]表名;
+		select  字段1,字段2...    from   [数据库.]表名;
+		select   ...  where  字段1='值'   and|or   字段2='值';
+		
+		select  *  from  nsd.base;				##查询base表记录
+		select  name,password  from  nsd.base;			##只查询base表记录的name和password字段
+		select  *   from  nsd.base  where  id=3;			##查询id字段值为3的数据
+		select  *   from  nsd.base  where  id=3  and  passwd="solicitous";	##查询id字段值是3的并且password字段值是solicitous的数据
+		select  *  from  nsd.base  where  id=3  or  id=1;		##查询id字段值是3或者id字段值是1的数据
+	
+	2）delete 删除表记录
+		delete  from   [数据库.]表名  where  条件语句;
+
+		delete  from  nsd.base  where  id=1;			##删除id字段值是1的数据
+		select * from  nsd.base;
+		delete  from  nsd.base  where  password="solicitous";	##删除password字段是solicitous的数据
+		select * from  nsd.base;
+		delete  from  nsd.base  where  id=2  or  id=4;		##删除id字段值是2或者id字段值是4的数据
+		select * from  nsd.base;
+		delete   from  nsd.base;				##删除表中的所有记录
+		select * from  nsd.base;
+
+	3）insert 添加表记录
+		insert  into  表名  values(值1,值2...)
+		
+		insert  nsd.base  values(6,"wanggang","nsd2002");		##添加一条记录
+		select  *  from nsd.base;
+		insert  nsd.base  values(7,"wanggang02","nsd2003");
+		select  *  from nsd.base;
+		delete  from  nsd.base  where  id=6  or  id=7;		##删除id字段值是6或者id字段值是7的数据
+		select  *  from nsd.base;
+
+	4）刷新mysql.user表的信息
+
+		select  user,host,password  from  mysql.user;			##查询mysql.user表的user和host还有password字段的值
+		select  user,host,password  from  mysql.user  where  password='';	##查询mysql.user表的user和host还有password字段的值，并且password字段值要是为空的数据
+		delete  from  mysql.user  where  password='';			##删除passwod字段值为空的数据
+		select user,host,password  from  mysql.user;
+		flush  privileges;						##刷新数据库mysql.user表
+		
+	5）查看表结构
+		desc  [库名.]表名
+		
+		desc  nsd.base;						
+
+
+
+
+
+
+

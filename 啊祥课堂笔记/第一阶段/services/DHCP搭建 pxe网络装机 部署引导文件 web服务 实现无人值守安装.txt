@@ -1,0 +1,185 @@
+1、DHCP搭建
+	1）DHCP概述及原理
+		动态主机配置协议：由 IETF（Internet 网络工程师任务小组）组织制定，用来简化主机地址分配管理
+		
+		主要分配以下网络参数：
+			IP地址、子网掩码、广播地址
+			网关地址、DNS服务器地址
+		
+		DHCP地址分配的工作流程：
+			DISCOVERY ——》OFFER ——》REQUEST ——》ACK
+			客户端发送广播请求，询问谁是DHCP服务器，谁可以给我一个IP地址
+                                               ，然后DHCP服务器回应客户端，说我可以给你IP地址，客户端这时回
+                                                复DHCP服务器确认收到，然后服务端最后再确认一下分配给客户端的IP地址是否有重复的
+		
+		服务端基本概念：
+			租期：允许客户机租用IP地址的时间期限，单位为秒
+			作用域：分配给客户机的IP地址所在的网段
+			地址池：用来动态分配的IP地址的范围
+		
+		配置dhcpd地址分配服务：
+			安装 dhcp 软件
+			配置文件：/etc/dhcp/dhcpd.conf
+			                vim   /etc/dhcp/dhcpd.conf
+				:r   /usr/share/doc/dhcp*/dhcpd.conf.example
+				subnet  192.168.4.0  netmask  255.255.255.0  {		##声明网段
+  				range  192.168.4.100  192.168.4.200;			##IP范围
+  				option  domain-name-servers  192.168.4.7;		##指定DNS服务器
+  				option  routers  192.168.4.254;			##指定网关
+  				default-lease-time  600;				##IP地址租期时间
+  				max-lease-time  7200;				##IP地址租期最长时间
+				}
+				:wq
+			启动服务：systemctl  restart  dhcpd
+				 systemctl  enable  dhcpd
+		
+		dhclient 临时配置测试：
+			格式：dhclient  -d
+			-d：调试测试模式
+			-r：删除清空dhcp的分配
+			
+			点击vmware的虚拟网络编辑器，将vmnet1网卡的dhcp关掉，然后点击确定
+			nmcli   connection  modify  ens33  ipv4.method  auto  connection.autoconnect  yes
+			nmcli   connection  up  ens33
+			dhclient  -r	##释放IP地址
+			dhclient  -d	##重新获取IP地址
+
+
+2、PXE网络装机
+	1）网络装机的优势：
+		规模化：同时装配多台主机
+		自动化：装系统、配置各种服务
+		远程实现：不需要光盘、U盘等物理安装介质
+
+	2）什么是PXE网络
+		预启动执行环境，可以在操作系统之前运行
+		可用于远程安装
+
+		工作模式：PXE client 集成在网卡的启动芯片中
+			当计算机引导时，从网卡芯片中把 PXE client 调入内存执行，
+                                                获取 PXE server 配置、显示菜单，根据用户选择将远程引导程序下载到本机运行
+
+		PXE组件及过程分析：
+			需要那些服务组件？
+				DHCP服务：分配IP地址，定位引导程序
+				TFTP服务：提供系统引导程序下载
+				HTTP服务（或FTP/NFS）：提供yum安装源
+
+			客户机应具备条件：
+				网卡芯片必须支持PXE协议
+				主板支持从网卡启动
+
+			过程分析：DHCP首先分配IP地址给客户端，然后客户端通过网络和TFTP服务建立通信
+                                              ，然后获取TFTP共享的系统引导程序，然后再访问http服务器提供的软件源，安装操作系统
+
+			配置dhcpd服务：
+				配置文件：/etc/dhcp/dhcpd.conf
+				pxelinux.0：网卡引导文件（网络装机说明书）
+
+				vim  /etc/dhcp/dhcpd.conf
+				subnet  192.168.4.0  netmask  255.255.255.0 {
+ 	 			  range  192.168.4.100  192.168.4.200;
+  				  option  domain-name-servers  192.168.4.7;
+  				  option  routers  192.168.4.254;
+  				  default-lease-time  600;
+  				  max-lease-time  7200;
+  				  next-server  192.168.4.7;	##指定客户端下一个人该去找谁获取文件
+  				  filename  "pxelinux.0";	##网卡引导文件（网络装机说明书，作用就是告诉客户机你下一步要干嘛，需要去/var/lib/tftpboot/pxelinux.cfg/default这个路径下找到default这个菜单文件）
+				}		
+				:wq
+				systemctl   restart  dhcpd
+				netstat  -antup |  grep  :67
+			
+				
+		
+3、配置TFTP服务
+	1）启用TFTP服务端
+		小文件传输协议，UDP 69端口
+		主要用来传送小文件，不支持认证和复杂FTP操作
+		默认资源目录：/var/lib/tftpboot
+			yum  -y  install   tftp-server			##安装tftp软件
+			systemctl  restart  tftp			##启动tftp服务
+			
+	2）部署pxelinux.0文件（网络装机说明书，作用就是告诉客户机你下一步要干嘛，需要去/var/lib/tftpboot/pxelinux.cfg/default这个路径下找到default这个菜单文件）
+		yum   provides   */pxelinux.0				##查找那个软件包拥有pxelinux.0这个文件
+		yum   -y   install  syslinux  				##安装syslinux软件生成pxelinux.0文件
+		rpm   -ql   syslinux  |  grep  pxelinux.0
+		cp  /usr/share/syslinux/pxelinux.0   /var/lib/tftpboot/
+		ls   /var/lib/tftpboot
+
+	3）部署菜单文件（作为装机时的菜单选项）
+		mkdir  /var/lib/tftpboot/pxelinux.cfg
+		mount  /dev/cdrom  /dvd
+		Is   /dvd/isolinux						
+		cp  /dvd/isolinux/isolinux.cfg  /var/lib/tftpboot/pxelinux.cfg/default		##将光盘中的菜单文件拷贝到指定的路径下
+                                  Is   /var/lib/tftpboot/pxelinux.cfg/default	
+
+
+
+4、部署引导文件
+	1）网卡引导文件：pxelinux.0
+	     菜单文件：pxelinux.cfg/default
+	     图形模块：vesamenu.c32
+	     背景图片：splash.png
+	     启动内核：vmlinuz
+	     驱动程序：initrd.img
+
+	2）将所有文件都放到 /var/lib/tftpboot 目录下：
+		cd /dvd/isolinux/
+		cp splash.png vmlinuz initrd.img vesamenu.c32 /var/lib/tftpboot/
+		
+	3）修改菜单文件：
+		vim /var/lib/tftpboot/pxelinux.cfg/default
+		11 menu title PXE Server CentOS7
+		61 label linux
+      		62   menu label ^PXE CentOS7 NSD2002
+ 		63   menu default
+ 		64   kernel vmlinuz
+ 		65   append initrd=initrd.img
+		:wq
+		
+	4）新建一台虚拟机后进行测试，能看到菜单界面就代表成功
+
+
+5、部署 Web服务 及 Kickstart 应答文件
+	1）搭建 httpd 服务提供光盘所有内容，利用 Kickstart 生成应答文件
+		yum  -y  install  httpd
+		systemctl   restart  httpd
+		mkdir   /var/www/html/dvd
+		mount   /dev/cdrom    /var/www/html/dvd
+		yum  -y   install  system-config-kickstart
+		system-config-kickstart
+		vim   /etc/yum.repos.d/dvd.repo		##修改yum仓库标识：[development]，让kickstart认识
+		[development]
+		:wq
+		system-config-kickstart			##图形界面详细操作见笔记中的图片截图
+
+		ls  /root/ks.cfg				##最后生成ks.cfg保存到/root下就可以了
+
+
+		客户端：http://192.168.4.7/dvd
+		PXE服务端：在使用 system-config-kickstart 这条命令后，想要看到软件包选择的选项，需要在自己本地的仓库配置文件中修改标识，只有标识是 [development] 的 system-config-kickstart 才认识
+
+6、实现无人值守安装
+	1）将应答文件通过 httpd 服务共享出去给客户端访问
+		cp  /root/ks.cfg   /var/www/html
+		
+	2）通过菜单文件指定应答文件位置
+		vim  /var/lib/tftpboot/pxelinux.cfg/default
+		65   append initrd=initrd.img   ks=http://192.168.4.7/ks.cfg
+		:wq
+		
+	3）用之前新建的虚拟机测试即可
+
+
+PXE实现的思路：
+	1、DHCP：IP地址、next-server、filename
+	2、tftp：pxelinux.0
+	3、pxelinux.0：pxelinux.cfg/default
+	4、default：vesamenu.c32、splash.png、vmlinuz、Initrd.img
+		    ks=http://192.168.4.7/ks.cfg
+	5、HTTP：共享光盘内容和 ks.cfg 应答文件
+		/var/www/html/dvd/*
+		/var/www/html/ks.cfg
+			
+		

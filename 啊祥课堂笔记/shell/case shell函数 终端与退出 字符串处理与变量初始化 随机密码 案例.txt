@@ -1,0 +1,382 @@
+1、case 语句
+	1）case 语法
+		作用：用于检查、判断变量的取值
+		效果类似于多分支的 if 语句
+		如果与预设的值相匹配，则执行对应的操作
+		命令序列的最后必须以分号结尾
+		case  变量  in
+		预设值1)
+		      命令序列1;;
+		预设值2)
+		      命令序列2;;
+		... ...
+		*)
+		      默认命令序列
+		esac
+			
+	2）数组
+		数组是一个变量，但是这一个变量可以存储多个值，可以存储多个数据的集合就是数组	
+		定义数组：变量名=(值1  值2  值3 ...)
+		调用数组值：echo  ${变量名[下标]}
+
+	
+	3）case 脚本案例
+		案例1：判断用户的输入
+		vim  /root/shell/day03/usershuru.sh
+		#!/bin/bash
+		read -p "请输入redhat或fedora：" str
+		case $str in
+		redhat)
+       			echo "fedora";;
+		fedora)
+        			echo "redhat";;
+		*)
+        			echo "必须输入redhat或fedora";;
+		esac
+
+		案例2：石头剪刀布
+		vim  /root/shell/day03/stjdb.sh
+		#!/bin/bash
+		game=(石头 剪刀 布)
+		num=$[RANDOM%3]
+		computer=${game[$num]}
+		echo "请根据下列提示选择您的出拳手势"
+		echo "0：石头"
+		echo "1：剪刀"
+		echo "2：布"
+		read -p "请输入："   str
+		case $str in
+		0)
+        			if [ $num -eq 0 ];then
+                			echo -e "\033[33m平局\033[0m"
+                			echo "电脑输入的是：$computer"
+                			echo "您输入的是：石头"
+        			elif [ $num -eq 1 ];then
+                			echo -e "\033[32m你赢了\033[0m"
+                			echo "电脑输入的是：$computer"
+                			echo "您输入的是：石头"
+       			else
+                			echo -e "\033[31m你输了\033[0m"
+                			echo "电脑输入的是：$computer"
+                			echo "您输入的是：石头"
+        			fi;;
+		1)
+        			if [ $num -eq 0 ];then
+                			echo -e "\033[31m你输了\033[0m"
+                			echo "电脑输入的是：$computer"
+                			echo "您输入的是：剪刀"
+        			elif [ $num -eq 1 ];then
+                			echo -e "\033[33m平局\033[0m"
+                			echo "电脑输入的是：$computer"
+                			echo "您输入的是：剪刀"
+        			else
+                			echo -e "\033[32m你赢了\033[0m"
+                			echo "电脑输入的是：$computer"
+                			echo "您输入的是：剪刀"
+        			fi;;
+		2)
+        			if [ $num -eq 0 ];then
+                			echo -e "\033[32m你赢了\033[0m"
+                			echo "电脑输入的是：$computer"
+                			echo "您输入的是：布"
+        			elif [ $num -eq 1 ];then
+                			echo -e "\033[31m你输了\033[0m"
+                			echo "电脑输入的是：$computer"
+                			echo "您输入的是：布"
+        			else
+                			echo -e "\033[33m平局\033[0m"
+                			echo "电脑输入的是：$computer"
+                			echo "您输入的是：布"
+        			fi;;
+		*)
+        			echo "必须输入0-2的整数"
+		esac
+                  
+                            打印菜单：   
+                                      cat  << -EOF
+                                            1.
+                                             2. 
+                                             3.
+                                          EOF
+
+
+2、Shell 函数
+	1）函数的语法格式
+		在 Shell 环境中，将一些需要重复使用的操作，定义为公共的语句块，即可称为函数
+		定义函数：
+			函数名(){
+			     命令序列1
+			     命令序列2
+			     ... ...
+			}
+                                            function  函数名 {
+                                                 命令程序  。。。
+                                                }
+		调用函数：函数名
+		调用函数时传值：函数名  值1  值2  ... ...
+			传递的值会作为函数的“位置参数”在函数内调用
+
+	2）函数脚本案例
+		案例1：简单示例脚本
+			vim  /root/shell/day03/imsg.sh
+			imsg(){
+				echo  "hello world"
+				echo  "haha"
+				echo  "xixi"
+			}
+			imsg
+
+		案例2：加法器
+			vim  /root/shell/day03/add.sh
+			add(){
+				echo  $[$1+$2]	
+			}
+			add  1  2
+			add  2  3
+			add  10  20
+
+ 		案例3：输出颜色
+			vim  /root/shell/day03/cecho.sh
+			cecho(){
+				echo  -e  "\033[$1;$2m$3\033[0m"
+			}
+			cecho  1  31  OK
+			cecho  4  32  OK
+			cecho  5  33  OK
+		案例4：多进程版 ping 测试
+			vim  /root/shell/day03/myping.sh
+			#!/bin/bash
+			myping(){
+        				ping -c2 -i0.1 -W1 $1 &> /dev/null
+        				if [ $? -eq 0 ];then
+                				echo "$1 is up"
+        				else
+                				echo "$1 is down"
+        				fi
+			}
+			for i in {1..254}
+			do
+        				myping 192.168.4.$i &
+			done
+			wait
+                                wait： 当之前所有的命令都执行完毕之后结束脚本	
+
+3、Shell 的中断与退出
+	1）脚本中断与退出的命令
+		continue：可以结束本次循环，继续后面的循环
+		break：可以结束循环体，相当于结束本次循环体剩余的所有循环
+		exit：可以退出脚本，后续脚本所有语句一律不执行，直接退出脚本
+
+	2）grep  命令
+		-q：过滤后不管存不存在都不显示结果
+		-w：只过滤单独的单个单词
+		
+	3）脚本案例
+		案例1：打印1-5，使用 continue 结束循环
+			vim   /root/shell/day03/continue.sh
+			for  i  in {1..5}
+			do
+				[ $i -eq 3 ] && continue
+				echo  $i
+			done
+			echo  over
+
+		案例2：打印1-5，使用 break 结束循环
+			vim   /root/shell/day03/continue.sh
+			for  i  in {1..5}
+			do
+				[ $i -eq 3 ] && break
+				echo  $i
+			done
+			echo  over
+	
+		案例3：打印1-5，使用 exit 结束循环
+			vim   /root/shell/day03/continue.sh
+			for  i  in {1..5}
+			do
+				[ $i -eq 3 ] && exit 
+				echo  $i
+			done
+			echo  over
+
+		案例4：双色球开奖
+			vim  /root/shell/day03/duble_color.sh
+			#!/bin/bash
+			red_ball=""
+			blue_ball=""
+			while :
+			do
+        				clear
+        				echo -e "\033[32m*****双色球开奖*****\033[0m"
+        				tmp=$[RANDOM%33+1]
+        				echo "$red_ball" | grep -q -w $tmp && continue
+        				red_ball+=" $tmp"
+        				echo -en "\033[1;31m$red_ball\033[0m"
+        				word=`echo $red_ball | wc -w`
+        				if [ $word -eq 6 ];then
+               					blue_ball=$[RANDOM%16+1]
+                				sleep 0.5
+                				echo -e "\033[5;34m $blue_ball\033[0m"
+                				break
+        				fi
+        				sleep 0.5
+			done
+
+
+
+4、字符串处理与变量初始化
+	1）字串截取
+		语法格式：${变量:起始位置:长度}	##编号从0开始
+		echo  ${#pthone}			##统计变量长度
+		
+		abc=123456789123
+		echo  ${#abc}
+		echo  ${abc:0:3}
+		echo  ${abc:5:6}
+		echo  ${abc:6}
+		echo  ${abc:2:-2}
+		
+	2）字串替换
+		只替换匹配的一个结果：${变量/旧字符/新字符}
+		替换匹配到的全部结果：${变量//旧字符/新字符}
+
+		abc=123456123
+		echo  ${abc/2/A}
+		echo  ${abc//2/A}
+
+	3）字串掐头
+		从左向右，最短匹配删除：（对变量掐头不会改变变量原有的值）
+			${变量#关键词}		
+		从左向右，最长匹配删除：
+			${变量##关键词}
+
+		a=`head -1 /etc/passwd`
+		echo  $a
+		echo  ${a#*:}
+		echo  ${a##*:}
+
+
+	4）字串去尾
+		从右向左，最短匹配删除：（对变量去尾不会改变变量原有的值）
+			${变量%关键词}		
+		从右向左，最长匹配删除：
+			${变量%%关键词}
+
+		a=`head -1 /etc/passwd`
+		echo  $a
+		echo  ${a%:*}
+		echo  ${a%%:*}
+
+	5）变量初始化
+		变量有值，则返回该变量的值
+		变量无值，则返回初始值
+			格式：${变量:-初始值}
+
+		QQ=123457
+		echo  ${QQ:-xyz}
+		echo  ${BB:-xyz}
+	
+	6）脚本案例
+		案例1：批量修改文件扩展名
+		touch   {a,b,c,d,e,f}.txt
+		vim  /root/shell/day03/modify.sh	
+		#!/bin/bash
+		for i in `ls /root/shell/day03/*.$1`
+		do
+        			mv $i ${i%.*}.$2
+		done
+	
+		案列2：创建系统用户
+		vim  /root/shell/day03/user.sh
+		#!/bin/bash
+		read -p "请输入用户名：" iname
+		if [ -z $iname ];then
+        			echo -e "\033[31m用户名没有输入，脚本将退出...\033[0m"
+        			exit
+		fi
+		read -p "请输入密码：" ipass
+		ipass=${ipass:-123456}
+		useradd $iname
+		echo $ipass | passwd --stdin $iname
+
+
+5、随机密码脚本案例
+	1）字串截取生产随机密码
+		#!/bin/bash
+		pass=""
+		key="abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+		for i in {1..10}
+		do
+        			int=$[RANDOM%${#key}]
+        			tmp=${key:$int:1}
+        			pass=${pass}${tmp}
+		done
+		echo $pass
+	
+	2）使用命令生成随机密码
+		uuidgen
+		openssl   rand  -base64  10
+
+	3）使用设备文件生产随机密码
+		strings  /dev/random
+		strings  /dev/urandom
+		tr 命令可以对数据进行替换、删除等操作（ -c ：取反，-d：删除）
+		tr  -cd  '0-9a-zA-Z'  <  /dev/urandom  | head -c  10
+			删除随机数据中不是数字、小写字母、大写字母的数据
+			在截取出来的字串中提取前10个字符
+
+6、综合案例
+	案例1：cp进度条脚本
+		vim  /root/shell/day03/jindutiao.sh
+		#!/bin/bash
+		bar(){
+        		while :
+        		do
+                		echo -ne "\033[41m \033[0m"
+                		sleep 0.5
+        		done
+		}
+		bar &
+		cp -r $1 $2
+		kill $!
+		echo
+		
+	案例2：菜单选择
+		vim  /root/shell/day03/menu.sh
+		#!/bin/bash
+		echo "1.查看网卡信息"
+		echo "2.查看内存信息"
+		echo "3.查看磁盘信息"
+		echo "4.查看CPU信息"
+		echo "5.查看账户信息"
+
+		read -p "请输入【1-5】，选择相应的操作：" str
+		case $str in
+		1)
+        			ifconfig | head -2;;
+		2)
+        			mem=`cat  /proc/meminfo  | grep MemAvailable | tr -s " " | cut -d" " -f2`
+        			echo "当前机器剩余内存是：${mem}K";;
+		3)
+        			disk=`df | grep /$ | tr -s " " | cut -d" " -f4`
+        			echo "当前机器剩余磁盘空间是：${disk}K";;
+		4)
+        			cpus=`uptime | tr -s " " | cut -d" " -f11`
+        			echo  "当前机器15分钟CPU负载是：$cpus";;
+		5)
+        			userlogin=`who | wc -l`
+        			userall=`cat /etc/passwd  | wc -l`
+        			echo "当前登录系统的用户是：$USER"
+        			echo "当前登录系统的用户数量是：${userlogin}个"
+        			echo "当前系统的用户总数是：${userall}个";;
+		*)
+        			echo "超出【1-5】的范围";;
+		esac
+
+	案例3：fork炸弹
+	vim  /root/shell/day03/fork.sh	
+	#!/bin/bash
+	a(){
+	   a|a &
+	}
+	a

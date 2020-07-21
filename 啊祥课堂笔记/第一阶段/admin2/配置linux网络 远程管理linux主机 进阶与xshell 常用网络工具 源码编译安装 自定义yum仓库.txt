@@ -1,0 +1,251 @@
+1、配置Linux网络
+	1）配置永久主机名
+		vim  /etc/hostname			重启后生效
+		svr7.tedu.cn
+
+	2）查看网络链接
+		使用 show 指令
+			nmcli  connection  show
+			nmcli  connection  show  "连接名"
+		
+	3）修改网络配置
+		使用 modify 指令
+			nmcli  connection  modify  "连接名"  参数1  值1.. ..
+			常用参数：
+				ipv4.method  auto|manual
+				ipv4.addresses  "IP地址/掩码长度"
+				ipv4.gateway  网关地址
+				ipv4.dns   DNS_IP地址
+				connection.autoconnect  yes|no
+
+			例子：nmcli connection modify "ens33" ipv4.method manual ipv4.addresses 192.168.4.7/24 ipv4.gateway 192.168.4.254 ipv4.dns 192.168.4.7 connection.autoconnect yes
+			
+			查看网卡配置文件：
+				cat   /etc/sysconfig/network-scripts/ifcfg-ens33
+	
+	4）查看网关
+		route   -n
+
+	5）激活/禁用网络连接
+		使用 up/down 指令
+			nmcli  connection  down  "连接名"
+			nmcli  connection  up  "连接名"
+
+	6）为本机指定DNS服务器
+		指定DNS服务器：nameserver  DNS服务器地址
+		
+		例如：vim  /etc/resolv.conf
+		          nameserver   192.168.4.254
+
+	7）虚拟网络类型：
+		桥接模式：
+			Guest 与 Host 连接到同一个交换机上
+			通过桥接物理网卡，相当于直连到Host所在网络
+	
+			1、设置虚拟机的网卡适配器为桥接模式
+			2、将虚拟机的IP配置方式设置为auto，自动获取的方式，然后重新激活网卡（nmcli connection modify ens33 ipv4.method auto connection.autoconnect yes）
+			3、如果激活失败，点击左上角编辑，点击虚拟网络编辑器，选择vmnet0（桥接网卡），将真机上访问外网的网卡绑定到vmnet0上
+			4、如果网关和已经自动获取的IP地址不在同一网段，需要利用nmcli命令配置一下网关，设置为空，然后重新激活网卡（nmcli connection modify ens33 ipv4.gateway ''）
+			5、查看真机上访问外网的网卡的IP网段
+			6、使用虚拟机ping一下真机上访问外网的网卡的IP地址（真机右击桌面网络，点击属性，更改适配器设置，双击查看访问外网的网卡的IP）
+			7、使用firefox 访问www.baidu.com，如果页面可以出来，就代表成功，如果出不来就代表失败
+				firefox   www.baidu.com
+			8、点击左上角编辑，点击虚拟网络编辑器，选择vmnet0（桥接网卡），将真机上访问外网的网卡绑定到vmnet0上，然后再重新激活网卡，再去访问www.baidu.com
+
+		隔离模式：
+			Guest 可以访问同一虚拟交换机上的其他Guest
+			但无法访问Host所在的外部网络
+
+			1、设置虚拟机的网卡适配器为vmnet1模式
+			2、手工配置虚拟机的IP地址为192.168.4.7/24，重新激活网卡
+			3、查看真机上vmnet1的网卡的IP地址，把他使用手工配置的方式修改为 192.168.4.1
+			4、使用真机Ping  192.168.4.7，使用虚拟机ping 192.168.4.1
+			5、如果ping不通，可以再检查一下虚拟机和真机的防火墙有没有关闭，需要把防火墙都关掉
+
+2、远程管理Linux主机
+	1）SSH概述（提供远程服务）
+		为客户机提供安全的Shell环境
+		默认端口：TCP 22
+
+	2）OpenSSH 服务
+		服务名称：sshd
+		主程序：/usr/sbin/sshd、/usr/bin/ssh
+		配置文件：/etc/ssh/sshd_config
+			/etc/ssh/ssh_config
+
+	3）SSH 远程使用
+		使用 ssh 客户端远程服务器
+			ssh   [选项]...    服务器
+			ssh   [选项]...    用户名@服务器  
+			ssh   [选项]...    -l   用户名    服务器
+			-l	指定使用什么用户去远程服务器
+
+			例如：
+			ssh    192.168.4.207
+			ssh  zengye@192.168.4.207
+			ssh  -l   zengye  192.168.4.207
+
+		非常规SSH访问
+			-p	端口：连接到指定的端口
+			-X	启用X转发，在本机运行对方的图形程序
+
+		修改默认端口
+			vim  /etc/ssh/sshd_config
+			Port  8022
+			:wq
+			systemctl  restart  sshd
+
+			ssh  -p  8022  -X  root@192.168.4.207
+
+		退出远程
+			exit
+		
+	4）使用 SCP 远程复制工具（基于SSH服务）
+		scp   [-r]   用户名@服务器:路径     本地路径
+		scp   [-r]   本地路径     用户名@服务器:路径
+
+		例如：
+		scp   -r   root@192.168.4.207:/etc/hosts   /opt/
+		scp   -r   /etc/hosts   root@192.168.4.207:/opt/
+
+3、远程管理进阶与 Xshell
+	1）实现 ssh 无密码登陆
+		生成公钥与私钥，传递公钥到对方主机（公钥相当于是一把锁，私钥是一把钥匙，拿着钥匙去开锁，就可以免密码登陆）
+		ssh-keygen			一路回车生成公钥和私钥
+		ssh-copy-id  root@192.168.4.207	传递公钥到虚拟机pc207
+		ssh   root@192.168.4.207		测试是否可以免密码登陆
+
+	2）Windows —》 Linux 远程访问
+		安装 Xshell 软件
+
+
+4、常用的网络工具
+	1）ip 命令的使用
+		查看IP地址：ip  address  show
+
+		添加IP地址：ip  address  add  ip地址/子网掩码   dev   网卡名称
+			ip   address  add  192.168.1.1/24  dev  ens33
+
+		删除IP地址：ip  address  del  ip地址/子网掩码  dev  网卡名称
+			ip   address  del  192.168.1.1/24  dev  ens33
+
+		添加路由：ip  route  add  网段地址/子网掩码  via  下一跳地址
+			ip   route  add  10.0.0.0/8  via  192.168.1.100
+
+		查看路由：ip  route  show
+
+		删除路由：ip  route  del  网段地址/子网掩码  via  下一跳地址
+			ip   route  del  10.0.0.0/8  via  192.168.1.100
+
+		永久生效：把命令写入到 /etc/rc.d/rc.local
+
+		IP命令的更多用法，课下可以自己参考这个网址：https://zenandidi.com/archives/366#33_IP
+
+	2）traceroute 追踪路由
+		格式：traceroute  IP地址
+			traceroute  192.168.4.7
+		TTL值：每经过一个路由器值减少1（路由器通过不同的TTL值追踪经过了哪些路由器）
+		Windows命令路由跟踪 tracert
+			tracert  www.baidu.com
+			tracert  www.jd.com
+			tracert  www.qq.com
+
+	3）netstat 和 ss 命令查看监听的端口及信息
+		常用选项：
+			-a：显示所有活动连接
+			-n：以数字形式显示
+			-p：显示进程信息
+			-t、-u：查看TCP连接/UDP连接
+			-l：正在监听
+		
+		netstat  -anptu
+			Proto：使用的协议
+			Recv-Q：表示网络接收队列
+			Send-Q：表示网络发送队列
+			Local Address：本地监听的地址及端口
+			Foreign Address：那些外来地址访问我
+			State：监听的状态
+			PID/Program name：进程的PID和进程名
+
+		ss  -ltuna
+			Netid：使用的协议
+			State：监听的状态
+			Recv-Q：表示网络接收队列
+			Send-Q：表示网络发送队列
+			Local Address:Port：本地监听的地址及端口
+			Peer Address:Port：哪些外来地址访问我
+
+	4）ping 测试网络连通性
+		-c	指定ping的个数
+		ping  -c  ip地址
+		
+		ping  -c  2  192.168.4.207
+
+5、编译安装介绍
+	1）源码安装的优势
+		获得软件的最新版，及时修复bug
+		软件功能可以按需选择/定制，有更多软件可供选择
+		源码包使用各种平台
+		
+	2）准备编译环境
+		需要安装gcc、make等编译工具
+		yum  -y  install  gcc  make
+		gcc  --version	
+
+	3）基本实现过程
+		步骤1：安装gcc和make开发工具，用于编译源码包
+			yum  -y  install   gcc  make
+		步骤2：tar解包，释放源代码至指定目录
+			tar  -xf  tools.tar.gz  -C  /
+			cd  /tools/
+			tar  -xf   inotify-tools-3.13.tar.gz  -C  /opt/
+			cd  /opt/inotify-tools-3.13/
+		步骤3：./configure 配置，指定安装目录/功能模块等选项
+			./configure  --prefix=/opt/myrpm
+		步骤4：make 编译，生成可执行的二进制程序文件
+			make
+		步骤5：make  install 安装，将编译好的文件复制到安装目录
+			make  install
+
+		查看安装完的路径：ls  /opt/myrpm
+		不指定安装的路径：/usr/local/
+
+6、自定义Yum仓库
+	要有可用的软件包和对应的repodata仓库数据文件
+		cd /tools/other
+		ls
+	对下载好的软件包自动生成仓库数据文件：
+		格式：createrepo   软件包目录路径
+			createrepo  /tools/other
+			ls  /tools/other/repodata
+	编写 yum 仓库配置文件，完成搭建
+		vim  /etc/yum.repos.d/dvd.repo
+		[myrpm]
+		name=myrpm
+		baseurl=file:///tools/other
+		enabled=1
+		gpgcheck=0
+		:wq
+		yum  clean  all
+		yum  repolist
+
+	
+		
+		
+					
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+					

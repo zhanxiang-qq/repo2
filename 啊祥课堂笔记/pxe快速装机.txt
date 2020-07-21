@@ -1,0 +1,17 @@
+yum -y  install  dhcp  httpd tftp-server   syslinux  system-config-kickstart 
+第一：  vim /etc/dhcp/dhcpd.conf  起服测试（dhclient -d）
+第二：  mkdir /var/lib/tftpboot/pxelinux.cfg 
+            cd /dvd/isolinux/  cp 四大文件 /var/lib/tftpboot/   
+            cd /var/lib/tftpboot/
+            cp /dvd/isolinux/isolinux.cfg        pxelinux.cfg/default
+            cp /usr/share/syslinux/pxelinux.0    .
+            vim pxelinux.cfg/default
+ 第三:    cd /var/www/html/
+             mkdir  dvd
+             mount /dev/cdrom  dvd
+             vim /etc/yum.repose.d/dvd.repo    (development)
+             system-config-kickstart 
+             cp /root/ks.cfg  .
+第四： systemctl restart httpd tftp dhcpd 
+           systemctl stop firewalld
+             

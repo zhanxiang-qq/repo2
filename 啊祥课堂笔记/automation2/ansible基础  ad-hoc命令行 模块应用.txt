@@ -1,0 +1,225 @@
+yum  -y  install  psmisc  vim   net-tools  bash-completion  lrzsz
+
+1、Absible基础
+	1）什么是Ansible
+		Ansible首次发布于2012年，作者Michael DeHaan
+			Michael DeHaan也是Cobbler的作者
+			于2015年被RedHat收购
+		
+		Ansible是一款自动化运维工具，基于Python开发
+			批量系统配置
+			批量程序部署
+			批量运行命令等功能
+			批量修改服务器密码
+			批量安装软件包
+			批量修改配置等功能
+
+	2）Ansible 产品特色
+		基于SSH架构、模块丰富、社区活跃、支持自定义模块、支持异构IT架构、部署简单，容易上手
+
+
+	3）环境准备：
+		control	192.168.4.253	manager
+		node1	192.168.4.1	test
+		node2	192.168.4.2	proxy
+		node3	192.168.4.3	web1
+		node4	192.168.4.4	web2
+		node5	192.168.4.5	database
+
+	4）配置SSH密钥：
+		control节点上配置（修改/etc/hosts）：
+			192.168.4.253	control
+			192.168.4.1	node1
+			192.168.4.2	node2
+			192.168.4.3	node3
+			192.168.4.4	node4
+			192.168.4.5	node5
+		control节点上配置（配置SSH免密）：
+			ssh-keygen  -f  /root/.ssh/id_rsa   -N  ''
+			for  i  in  node1  node2  node3  node4   node5
+			do
+				ssh-copy-id  $i
+			done
+
+	5）部署ansible软件
+		control节点上配置：
+			cd  /root
+			tar  -xf   ansible_soft.tar.gz
+			cd  ansible_soft
+			yum   -y  install   *
+			
+
+2、Ansible基本配置
+	1）主配置文件（ansible.cfg）：
+		参考/etc/ansible/ansible.cfg
+		
+		ansible配置文件查找顺序：
+			首先检测ANSIBLE_CONFIG变量定义的配置文件
+			其次检查当前目录下的./ansible.cfg文件
+			再次检查当前用户家目录下~/ansible.cfg文件
+			最后检查/etc/ansible/ansible.cfg文件
+
+	2）配置主配置文件：
+		mkdir  ~/ansible
+		vim   ~/ansible/ansible.cfg
+		[defaults]
+		inventory  = ~/ansible/hosts	##主机清单配置文件
+		#fork	= 5		##ssh并发数量
+		#ask_pass	  = true		##使用密钥还是密码远程
+		#host_key_checking = false	##是否校验密钥
+
+	3）inventory主机清单文件配置
+		vim  ~/ansible/hosts
+		[test]
+		node1
+		[proxy]
+		node2
+		[webserver]
+		node[3:4]
+		[database]
+		node5
+		[cluster:children]
+		webserver
+		database
+
+	4）测试Ansible环境与配置是否正常
+		cd  ~/ansible
+		ansible  all  --list-hosts		##查看所有主机列表
+		ansible  node1  -m  ping		##调用ping模块
+		ansible  node1,node2  -m  ping
+		ansible  webserver   -m  ping
+
+
+3、Ansible  ad-hoc 命令行
+	1）Ansible ad-hoc 是一种通过命令行批量管理的方式
+		格式：ansible  主机集合  -m  模块名  -a  "参数"
+		其他选项：-k 使用密码远程，-i 指定主机列表文件
+		
+		例子：
+			ansible  test  -k  -m ping			##使用密码远程
+			ansible  test  -m ping			
+			ansible  test  -i  /etc/hosts  -m ping		##使用指定的主机列表文件进行远程
+			ansible  test  -i  /root/ansible/hosts  -m ping
+			
+	2）command 默认模块
+		ansible  node1  -m  command  -a  "uptime"	
+		ansible  node1  -m  command  -a  "uname  -r"
+		ansible  node1  -m  command  -a  "ip  a  s"
+		ansible  node1  -a  "date"
+
+	3）如何获取ansible模块的帮助文档
+		ansible-doc  -l		##列出所有模块
+		ansible-doc  -l  |  wc  -l	##查看模块总数量
+		ansible-doc   | grep  yum	##过滤模块
+		ansible-doc   yum		##查看yum模块的帮助
+
+
+4、Ansible 常用模块应用案例（上）
+	1）Shell 模块
+		command和shell模块的区别：
+			command模块的命令不启动shell，直接通过ssh执行命令
+			command不支持bash的特性，如管道和重定向等功能
+			所有需要调用shell的功能都无法使用：
+			ansible  test  -m  command  -a  "ps  | wc -l"		##报错
+			ansible  test  -m  command  -a  "ifconfig | head -2"	##报错
+			ansible  test  -m  command  -a  "ps  &"			##报错
+			
+			shell模块会启动shell执行命令：
+			ansible  test  -m  shell  -a  "ps  | wc -l"		##查看进程数量
+			ansible  test  -m  shell  -a  "ifconfig | head -2"	##查看IP地址
+			ansible  test  -m  shell  -a  "ps  &"		##进程放入后台执行
+	
+			Ansible使用ssh远程连接被管理主机，退出ssh后所有状态失效：
+			ansible  test  -m  shell  -a  "cd  /tmp"			##切换到/tmp目录
+			ansible  test  -m  shell  -a  "touch  my.txt"		##没有指定路径，就是在远程过去后，在当前用户家目录下创建文件
+			ansible  test  -m  shell  -a  "ls  /tmp/my.txt"		##查看/tmp的my.txt文件就会失败
+			ansible  test  -m  shell  -a  "chdir=/tmp  touch  my.txt"	##使用chdir参数切换工作目录后再创建my.txt就可以再/tmp下创建一个名为my.txt的文件
+			
+			shell模块支持判断（creates、removes）:
+			creates  文件名：文件存在，不执行shell命令
+			removes  文件名：文件不存在，不执行shell命令
+			ansible  node1  -m  shell  -a  "ssh-keygen  -f  ~/.ssh/id_rsa  -N ''  creates=~/.ssh/id_rsa"	##当密钥文件存在的时候，就不执行创建密钥的命令，直接跳过
+			ansible  node1,node2  -m  shell  -a  "unzip  test.zip  removes=/bin/unzip"	##当unzip命令不存在的时候，就不执行解压文件的操作，直接跳过
+
+	2）script 模块
+		script允许在本地写脚本，拷贝到被管理端并执行
+		脚本可以不是shell脚本（如python、perl脚本等），可以没有x执行权限
+		vim  test.sh
+		#!/bin/bash
+		yum  -y  install  httpd
+		systemctl  start  httpd
+		:wq
+		ansible  node1,node2  -m  script  -a  "./test.sh"	##远程到节点主机，执行test.sh的命令，安装httpd并且开启httpd服务
+
+
+5、Ansible 常用模块应用案例（中）
+	1）file 模块：file模块可以创建文件、目录、链接、删除、修改权限属性等
+		幂等性：任意次执行所产生的结果均与第一次执行的结果相同
+		
+		ansible  test  -m  file  -a  "path=/tmp/file.txt  state=touch"				##在node1的/tmp目录下创建一个名为file.txt的文件
+		ansible  test  -m  file  -a  "path=/tmp/mydir  state=directory"			##在node1的/tmp目录下创建一个名为mydir的目录
+		ansible  test  -m  file  -a  "path=/tmp/file.txt  owner=sshd  group=adm  mode=777"	##修改file.txt文件的所有者为sshd，所属组为adm，权限为777
+		ansible  test  -m  file  -a  "path=/tmp/file.txt  state=absent"			##删除/tmp/file.txt文件
+		ansible  test  -m  file  -a  "path=/tmp/mydir  state=absent"				##删除/tmp/mudir目录
+		ansible  test  -m  file  -a  "src=/etc/hosts  path=/tmp/host.txt  state=link"		##给/etc/hosts文件创建一个软链接，放在/tmp目录下，名字叫做host.txt
+		
+	2）copy 模块：将文件拷贝到远程主机
+		backup=yes 如果目标主机有同名文件，则先备份
+		
+		echo   AAA  >  ~/a3.txt
+		ansible  node1,node2 -m  copy  -a  "src=~/a3.txt  dest=/root/"			##将本地家目录的a3.txt拷贝到node1和node2的家目录下
+		ansible  node1,node2  -m  copy  -a  "src=~/a3.txt  dest=/root/3a.txt"		##将本地家目录的a3.txt拷贝到node1和node2的家目录下，并改名为3a.txt
+		ansible  node1,node2  -m  copy  -a  "content='hello  world\ntest'  dest=/root/new.txt"	##在node1的家目录下创建一个文件new.txt，内容是hello world\ntest
+
+	3）fetch 模块：与copy类似，但是作用相反
+		可以将其他主机的文件拷贝到本地
+		
+		ansible  node1,node2  -m  fetch  -a  "src=/etc/hostname  dest=/root/"		##将node1和node2主机上的hostname文件拷贝到本地的家目录下
+		ls  /root/
+
+	4）lineinfile 模块：在修改单个文件的单行内容时可以使用lineinfile模块
+		ansible  test  -m  lineinfile  -a  "path=/etc/issue  line='hello  world'"			##在issue文件的最后添加一行内容为hello  world
+		ansible  test  -m  lineinfile  -a  "path=/etc/issue  line='hello  world'"			##重复执行，遵守幂等性原则，内容不变，执行多次的结果也不会发生改变
+		ansible  test  -m  lineinfile  -a  "path=/etc/issue  line='insert'  insertafter='Kernel'"	##在issue文件中最后一个包含Kernel的后面插入一行内容为insert
+		ansible  test  -m  lineinfile  -a  "path=/etc/issue  line='insert'  inserbefore='Kernel'"	##在issue文件中最后一个包含Kernel的前面插入一行内容为insert
+		ansible  test  -m  lineinfile  -a  "path=/etc/issue  regexp='hello'  line='ni hao'"		##将issue文件中最后一个包含hello的这一行替换为ni  hao
+
+	5）replace 模块：lineinfile会替换一整行，replace可以替换关键词，不会替换一整行
+		ansible  test  -m  replace  -a  "path=/etc/issue.net  regexp=Kernel  replace=Ocean"	##将issue.net文件中的所有Kernel替换为Ocean
+		
+
+6、Ansible 常用模块应用案例
+	1）user 模块
+		ansible  node1 -m user -a "name=tuser1"							##创建一个用户tuser1
+		ansible  node1 -m user -a "name=tuser2  uid=1010 group=adm  groups=daemon,root  home=/home/tuser2"	##创建账户并设置对应的属性
+		ansible  node1 -m user -a "name=tuser1 password={{'abc' | password_hash('sha512')}}"			##修改账户密码
+		ansible  node1 -m user -a "name=tuser1 state=absent"						##删除用户tuser1，但是不会删除家目录
+		ansible  node1 -m user -a "name=tuser2 state=absent  remove=true"					##删除用户tuser2，同时会删除家目录
+
+	2）yum_repository 模块
+		ansible node1 -m yum _repository -a "name=myyum description=hello  baseurl=file:///mnt  enabled=yes  gpgcheck=no"	##创建一个yum仓库文件
+		ansible node1 -m yum _repository -a "name=myyum description=test  baseurl=file:///mnt  enabled=yes  gpgcheck=no"	##修改仓库文件内容
+		ansible node1 -m yum_repository -a "name=myyum  state=absent"						##删除仓库配置文件
+
+	3）yum 模块（state：present 安装 | absent 卸载 | latest 升级）
+		ansible node2 -m yum -a "name=unzip state=present"	##安装unzip软件包
+		ansible node2 -m yum -a "name=unzip  state=latest"	##升级unzip软件包
+		ansible node2 -m yum -a "name=unzip  state=absent"	##卸载unzip软件包
+
+	4）service 模块（state：started 启动 | stopped 关闭 | restarted 重启 | enabled=yes  开机自启动）
+		ansible node1 -m yum -a "name=httpd"				##安装httpd软件
+		ansible node1 -m service -a "name=httpd state=started"			##启动httpd服务
+		ansible node1 -m service -a "name=httpd state=stopped"			##关闭httpd服务
+		ansible node1 -m service -a "name=httpd state=restarted"			##重启httpd服务
+		ansible node1 -m service -a "name=httpd state=started enabled=yes"		##设置开机自启动
+
+	5）lvg 模块（state：present 创建 | absent 删除）
+		ansible node1 -m yum -a "name=lvm2"				##安装创建卷组的工具
+		ansible node1 -m lvg -a "vg=myvg pvs=/dev/sdb1"		##创建卷组
+		ansible node1 -m lvg -a "vg=myvg pvs=/dev/sdb1,/dev/sdb2"	##扩展卷组
+		
+	6）lvol 模块（state：present 创建 | absent 删除）
+		ansible node1 -m lvol -a "lv=mylv vg=myvg size=2G"		##划分逻辑卷
+		ansible node1 -m lvol -a "lv=mylv vg=myvg size=4G"		##扩展逻辑卷
+		ansible node1 -m lvol -a "lv=mylv vg=myvg state=absent force=yes"	##删除逻辑卷
+		ansible node1 -m lvg -a "vg=myvg state=absent"			##删除卷组

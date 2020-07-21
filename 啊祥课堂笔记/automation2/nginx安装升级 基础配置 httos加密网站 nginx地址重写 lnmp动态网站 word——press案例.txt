@@ -1,0 +1,287 @@
+准备环境：
+1、CentOS7最小化安装，内存1G，磁盘默认的20G即可，装好系统后，使用vi配置yum仓库后安装如下软件即可：
+2、yum -y install psmisc vim net-tools bash-completion
+3、调整虚拟机网络适配器为vmnet2，配置IP为192.168.2.100，真机vmnet2网卡IP为192.168.2.254
+
+
+1、Nginx 安装与升级
+	1）Web 服务器对比
+		Uninx 和 Linux 平台下
+		Apache、Nginx、Tengine、Lighttpd
+	
+		Windows 平台下
+		微软公司的 IIS（Internet Information Server）
+
+	2）Nginx 简介
+		是俄罗斯人编写的十分轻量级的HTPP服务器
+		是一个高性能的HTTP和反向代理服务器，同时也是一个IMAP/POP3/SMTP代理服务器
+		官方网站：http://nginx.org
+
+	3）安装 Nginx
+		tar -xf  lnmp_soft.tar.gz  
+		cd  lnmp_soft
+		tar -xf nginx-1.16.1.tar.gz
+		cd nginx-1.16.1
+		yum -y install gcc pcre-devel  openssl-devel
+		useradd nginx
+		./configure  --prefix=/usr/local/nginx  --user=nginx --group=nginx  --with-http_ssl_module
+		make  && make install
+		ls  /usr/local/nginx
+		/usr/local/nginx/sbin/nginx
+		/usr/local/nginx/sbin/nginx  -V
+		/usr/local/nginx/sbin/nginx  -t
+		ps  aux | grep nginx
+		ss -antlup | grep  nginx
+
+		真机测试：浏览器上访问 192.168.2.100
+
+	4）Nginx 配置文件及目录
+		/usr/local/nginx/		##安装目录
+		conf/nginx.conf		##主配置文件
+		html			##网页目录
+		logs			##日志文件
+		sbin/nginx		##启动脚本
+
+	5）Nginx 进程管理
+		启动 Nginx 服务：
+			/usr/local/nginx/sbin/nginx
+		
+		常用选项：
+			-V：查看编译参数
+			-c：指定配置文件，启动服务
+			-t：测试配置文件语法是否有错误
+
+		查看服务相关进程及端口信息：
+			ps  aux  |  grep  nginx
+			ss  -antulp  |  grep  nginx
+
+		清空防火墙、设置SELinux：
+			iptables  -F
+			setenforce  0
+
+	6）平滑升级Nginx 服务
+		源码编译新版 Nginx：
+			cd  lnmp_soft
+			tar -xf nginx-1.17.6.tar.gz
+			cd  nginx-1.17.6
+			./configure  --with-http_ssl_module
+			make
+			mv /usr/local/nginx/sbin/nginx  /usr/local/nginx/sbin/nginx.old
+			cp  objs/nginx  /usr/local/nginx/sbin/
+			make  upgrade	或 killall  nginx;/usr/local/nginx/sbin/nginx
+			/usr/local/nginx/sbin/nginx  -V
+		
+
+
+2、Nginx 基础配置
+	1）用户认证配置：
+		vim  /usr/local/nginx/conf/nginx.conf
+		server {
+        			listen       80;
+        			server_name  localhost;
+        			auth_basic "username && password:";
+        			auth_basic_user_file /usr/local/nginx/pass;
+        			location / {
+            				root   html;
+            				index  index.html index.htm;
+        			}
+		}
+		:wq
+		yum  -y install httpd-tools
+		htpasswd  -c  /usr/local/nginx/pass  admin
+		htpasswd  /usr/local/nginx/pass  user1
+		/usr/local/nginx/sbin/nginx  -s  reload
+	
+		利用真机客户端测试：浏览器访问 192.168.2.100
+	
+	2）基于域名的虚拟主机配置：
+		vim  /usr/local/nginx/conf/nginx.conf
+		server {
+        			listen       80;
+        			server_name  web1.tedu.cn;
+        			auth_basic "username && password:";
+        			auth_basic_user_file /usr/local/nginx/pass;
+        			location / {
+            				root   html;
+            				index  index.html index.htm;
+        			}
+		}
+
+		server {
+        			listen       80;
+        			server_name  web2.tedu.cn;
+        			location / {
+            				root   web;
+            				index  index.html index.htm;
+        			}
+		}
+		:wq
+		mkdir   /usr/local/nginx/web
+		echo  web2  >  /usr/local/nginx/web/index.html
+		/usr/local/nginx/sbin/nginx  -s  reload
+
+
+	3）客户端测试（修改hosts域名解析）
+		Windows：C:\Windows\System32\drivers\etc\hosts		##管理员身份打开记事本进行修改
+		Linux：/etc/hosts
+		
+
+3、HTTPS 加密网址
+	1）常见密钥算法
+		对称加密：AES、DES
+		非对称加密：RSA、DSA
+	
+	2）生成密钥
+		SSL 加密网站的核心技术是非对称生成密钥
+		公钥、私钥、证书
+
+		cd  /usr/local/nginx/conf
+		openssl  genrsa  >  cert.key				##生成私钥
+		openssl  req  -new  -x509  -key  cert.key  > cert.pem	##生成证书（公钥）根据提示分别输入：国家、省份、城市、公司名称、部门名称、你的名字或服务器名字、邮箱
+
+		req：申请
+		-new：新建证书
+		-x509：证书格式
+		-key：指定私钥，利用私钥生成公钥
+
+	3）部署SSL加密网站
+		vim  /usr/local/nginx/conf/nginx.conf
+		    server {
+       			 listen       443 ssl;
+       			 server_name  web3.tedu.cn;
+        			 ssl_certificate      cert.pem;
+        			 ssl_certificate_key  cert.key;
+
+        			 ssl_session_cache    shared:SSL:1m;
+        			 ssl_session_timeout  5m;
+
+        			ssl_ciphers  HIGH:!aNULL:!MD5;
+        			ssl_prefer_server_ciphers  on;
+
+        			location / {
+            				root   html;
+            			index  index.html index.htm;
+        			}
+    		      }
+		/usr/local/nginx/sbin/nginx  -s  reload
+
+	4）客户端测试（修改hosts域名解析）
+		Windows：C:\Windows\System32\drivers\etc\hosts		##管理员身份打开记事本进行修改
+		Linux：/etc/hosts
+		
+
+4、Nginx 地址重写
+	1）什么是地址重写：
+		获得一个来访的URL请求，然后改写成服务器可以处理的另一个URL
+		
+		语法格式：rewite  regex   replacement  [flag]
+
+	2）应用案例：
+		案例1：当访问web1.tedu.cn/a.html 时跳转到 web1.tedu.cn/b.html
+		server {
+			listen 80;
+			server_name  web1.tedu.cn;
+			rewrite  "/a.html"  /b.html;
+		......
+		
+		案例2：当访问web1.tedu.cn 时跳转到 www.tmooc.cn
+		server {
+			listen 80;
+			server_name  web1.tedu.cn;
+			rewrite  ^/  http://www.tmooc.cn;
+		......
+
+		案例3：当访问web1.tedu.cn/任意 时跳转到 www.tmooc.cn/任意
+		server {
+			listen 80;
+			server_name  web1.tedu.cn;
+			rewrite  ^/(.*)$  http://www.tmooc.cn/$1;
+		......
+
+		
+
+5、LNMP 动态网站
+
+	静态数据：不需要解释器去解释的数据（图片，音乐，视频...）
+	动态数据：需要解释器解释的数据（shell脚本，php脚本...）
+		
+	1）什么是LNMP
+		L：Linux操作系统
+		N：Nginx网站服务软件
+		M：MySQL、MariaDB数据库
+		P：网站开发语言（PHP、Perl、Python）
+	
+	2）部署LNMP
+		安装Nginx
+			yum  -y install  gcc pcre-devel  openssl-devel
+			tar  -xf  nginx-1.17.6.tar.gz
+			cd  nginx-1.17.6
+			./configure  --with-http_ssl_module
+			make  &&  make  install
+			
+		安装mariadb
+			yum  -y  install  mariadb-server  mariadb  mariadb-devel
+		安装PHP
+			yum  -y  install  php  php-fpm  php-mysql
+		启动服务
+			/usr/local/nginx/sbin/nginx
+			systemctl  restart   mariadb
+			systemctl  restart  php-fpm
+			ss -antulp | grep  -E  ":80|:3306|:9000"
+
+		配置动静分离
+			vim  /usr/local/nginx/conf/nginx.conf
+			localtion / {
+				root  html;
+				index  index.php  index.html  index.htm;
+			}
+			location ~ \.php$ {
+            				root           html;
+            				fastcgi_pass   127.0.0.1:9000;
+            				fastcgi_index  index.php;
+            				#fastcgi_param  SCRIPT_FILENAME  /scripts$fastcgi_script_name;
+            				include        fastcgi.conf;
+        			}
+
+			vim  /usr/local/nginx/html/test.php
+			<?php
+			$i=33;
+			echo $i;
+			?>
+			
+			客户端访问测试：访问 web1.tedu.cn/test.php
+	
+			cp  /root/lnmp_soft/php_scripts/mysql.php   /usr/local/nginx/html/
+			
+			客户端访问测试：访问 web1.tedu.cn/mysql.php
+	
+			
+
+6、WordPress 案例
+	1）WrodPress简介
+		是一款用PHP语言开发的博客平台，可以支持再PHP和MySQL数据库的服务器上架设属于自己的网站
+		WordPress 功能强大、插件众多、主题丰富
+		官方网址：https://wordpress.org
+
+	2）上线WordPress
+		创建数据库，添加数据库账户并赋权
+			mysql
+			create  database  wordpress  character  set  utf8mb4;
+			grant  all  on  wordpress.*  to  wordpress@'localhost'  identified  by  'wordpress';
+			flush  privlieges;
+			exit
+		
+		上线wordpress代码
+			yum  -y  install  unzip
+			cd  /root/lnmp_soft
+			unzip  wordpress.zip
+			cd  wordpress
+			tar  -xf  wordpress-5.0.3-zh_CN.tar.gz
+			cp  -r  wordpress/*  /usr/local/nginx/html
+			chown  -R  apache:apache  /usr/local/nginx/html/
+			iptables  -F
+			setenforce  0
+			
+		客户端浏览器访问测试，进行初始化界面：web1.tedu.cn
+			
+			

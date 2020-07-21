@@ -1,0 +1,237 @@
+1、虚拟化概述
+	1）什么是虚拟化？
+		硬件虚拟化：一台物理计算机虚拟出多台逻辑计算机
+			CPU、内存可分配给多个虚拟机
+		
+		软件虚拟化：例如 一个httpd软件可以支撑多个网站
+			桌面虚拟机化等等
+	
+	2）什么是虚拟机？
+		通过软件平台模拟出的计算机
+			对用户来说，感受不到与物理计算机的差异
+			根据虚拟化程度不同，所需的修改也不同
+
+	3）虚拟化实现程度：
+		完全虚拟化：由平台软件来模拟实现
+			客户机的操作系统代码几乎不做修改
+		
+		半虚拟化：平台软件只提供最核心的虚拟化功能
+			需要修改客户机的系统内核，兼容性较差
+		
+		硬件辅助虚拟化：将实现虚拟化技术的部分功能硬件化
+			主要指 Intel / AMD 等CPU支持
+
+	4）常见的虚拟化产品：
+		VMware		vSphere平台，VMware Workstation
+		Micrisoft		VirtualPC、Hyper-V
+		RedHat		KVM、RHEV平台
+		Citrix		Xen
+		Oracle		Oracle VM VirtualBox
+
+	5）准备环境：将虚拟机A做成模拟主机，并且打开虚拟机化功能
+		关闭虚拟机——》打开虚拟机设置——》点击CPU（CPU个数和核心数都不用改）——》选中虚拟化 Inter VT-x/EPT 或 AMD-V/RVI(V)
+		选择内存——》修改为6000M——》再次开启虚拟机
+
+		查询虚拟化功能是否打开：lscpu  |  grep  vmx
+
+2、构建KVM平台
+	1）KVM介绍：
+		基于内核的完全虚拟化解决方案
+		红帽自5.4版本开始推出，可替代早先的Xen产品
+		需要Intel VT 或 AMD V 处理器技术支持
+		支持Linux/Unix/Windows客户机
+
+	2）Host OS 与 Guest OS
+		Host OS：运行KVM虚拟化平台的物理机的操作系统
+		Guest OS：虚拟机上运行的操作系统（RHEL、CentOS、Windows）
+
+	3）搭建 KVM 虚拟化平台（相当于 Linux 版的 vmware 虚拟管理器）
+		软件包：
+			qemu-kvm：为 kvm 提供底层仿真支持
+			libvirt-daemon：libvirtd 守护进程，管理虚拟机
+			libvirt-client：用户端软件，提供客户端管理命令
+			libvirt-daemon-driver-qemu：libvirtd 连接 qemu 的驱动
+			virt-manager：图形管理工具
+		
+		安装KVM虚拟化管理系统：
+			yum  -y  install  qemu-kvm   libvirt-daemon   libvirt-client   libvirt-daemon-driver-qemu   virt-manager
+			systemctl   restart   libvirtd
+			systemctl   enable   libvirtd
+
+
+3、KVM 命令管理
+	1）virsh 命令工具介绍
+		用来管理各虚拟机的命令接口
+			查看/创建/停止/关闭...
+			支持交互模式和非交互模式
+			非交互模式格式：virsh  控制指令   [虚拟机名称]   [参数]
+
+	2）virsh 常用命令使用
+		查看指定虚拟机的信息
+			virsh  dominfo   虚拟机名称
+
+		设置指定虚拟机开机自启动/不开机自启动
+			virsh  autostart   虚拟机名称
+			virsh  autostart  --disable  虚拟机名称
+		
+		运行 | 重启 | 关闭 | 强制关闭 指定的虚拟机
+			运行：virsh  start  虚拟机名称
+			重启：virsh  reboot  虚拟机名称
+			关闭：virsh  shutdown  虚拟机名称
+			强制关闭：virsh  destroy  虚拟机名称
+		
+		列出正在运行的虚拟机
+			virsh  list
+	
+		列出所有运行和不运行的虚拟机
+			virsh  list  --all
+
+		远程KVM虚拟机（不需要配置IP）：
+			virsh  console   centos7
+			
+			退出：ctrl + ]
+
+	3）一台KVM虚拟机的组成
+		虚拟机的配置文件：
+			默认位于：/etc/libvirt/qemu/虚拟机名称.xml
+		
+		虚拟机的磁盘文件：
+			默认位于：/var/lib/libvirt/images/虚拟机名称.img
+			或者由管理提前准备、手动指定磁盘文件路径
+
+
+
+4、KVM虚拟机快速建成
+	1）导出XML描述文件，作为新建虚拟机的描述文件
+		查看虚拟机的XML描述信息：
+			virsh  dumpxml   虚拟机名称
+		
+		导出虚拟机的XML描述信息：
+			virsh  dumpxml   虚拟机名称  >  new.xml
+
+		修改XML文件信息：
+			vim  new.xml
+			修改虚拟机名称
+			修改UUID（删除、uuidgen或直接修改）
+			指定磁盘路径
+			修改网卡MAC地址（删除或直接修改）
+
+		拷贝磁盘镜像文件作为新虚拟机的磁盘镜像文件：
+			cp  /var/lib/libvirt/images/虚拟机名.qcow2   /var/lib/libvirt/images/new.qcow2
+			
+		根据XML文件新建（定义）虚拟机：
+			格式：virsh  define   XML描述文件
+
+		删除已定义的虚拟机：（需要先关机后再取消定义）
+			格式：virsh  undefine   虚拟机名称
+
+		练习题答案：
+			1）cd   /etc/libvirt/qemu/
+				cp  centos7.xml   node1.xml
+				vim  node1.xml
+				修改虚拟机名称
+				修改UUID（删除、uuidgen或直接修改）
+				指定磁盘路径
+				修改网卡MAC地址（删除或直接修改）
+				:wq
+				cd  /var/lib/libvirt/images/
+				cp  centos7.qcow2  node1.qcow2
+				virsh  define  /etc/libvirt/qemu/node1.xml
+				virsh  list  --all
+				virsh  start   node1
+				virsh  destroy   node1
+
+			2）cd   /etc/libvirt/qemu/
+				cp  node1.xml   ce7_n2.xml
+				vim  ce7_n2.xml
+				修改虚拟机名称
+				修改UUID（删除、uuidgen或直接修改）
+				指定磁盘路径
+				修改网卡MAC地址（删除或直接修改）
+				:wq
+				cd  /var/lib/libvirt/images/
+				cp  node1.qcow2  ce7_n2.qcow2
+				virsh  define  /etc/libvirt/qemu/ce7_n2.xml
+				virsh  list  --all
+				virsh  start   ce7_n2
+				virsh  destroy   ce7_n2
+
+
+5、手动创建虚拟机
+	1）参照模板主机新建虚拟机
+		自定义XML文件和磁盘镜像文件存储路径
+		在自定义路径下创建新的磁盘文件和XML文件
+		使用virsh命令导入XML文件，生成新的虚拟机
+
+	2）简化XML复用过程
+		三合一指令：virsh  edit   虚拟机名
+			简化XML导出、修改、代入分部操作过程
+			直接修改模板虚拟机的XML配置，然后 :wq 保存退出即可
+
+	3）练习操作：
+		mkdir  /kvmfile			##创建自定义目录，作为xml文件和磁盘文件存储路径
+		cd  /kvmfile
+		virsh  dumpxml  centos7  >  stu01.xml		##使用dumpxml生成stu01的xml文件
+		vim  stu01.xml（修改虚拟机名称为stu01、UUID删除、磁盘存储路径/kvmfile/stu01.qcow2、删除网卡MAC地址）
+		cp   /var/lib/libvirt/images/centos7.qcow2   stu01.qcow2	
+		virsh  define  stu01.xml
+		virsh  start  stu01
+		virsh  list  --all
+		virsh  destroy  stu01
+
+		virsh  edit  centos7（修改虚拟机名称为stu02、UUID删除、磁盘存储路径/kvmfile/stu02.qcow2、删除网卡MAC地址）
+		:wq
+		cd   /kvmfile
+		cp   stu01.qcow2   stu02.qcow2
+		virsh  start  stu02			##使用virsh  edit 命令后不用定义虚拟机了，直接开启虚拟机即可
+		virsh  list  --all
+		virsh  destroy  stu02	
+
+
+6、COW 写时复制
+	1）镜像盘的类型
+		RAW：红帽 6 KVM默认，I/O效率高，占用磁盘空间大，不支持压缩、增量备份和快照
+		QCOW2：红帽 7 KVM默认，I/O效率较高，占用磁盘空间小，支持压缩、增量备份和快照
+		
+	2）COW 工作原理
+		直接映射后端盘的数据内容
+		当原始盘卷有修改时，将被改动的旧数据写入增量盘（前端）
+		对增量盘的修改不会回写到原始盘
+			
+	3）应用思路
+		原始盘（模板机）——》 前端盘（新虚拟机）
+		原始盘用 qcow2 格式，建立前端盘速度很快
+		
+		基本用法：
+			qemu-img  create -f  格式  -b  原始盘   前端盘  [大小]
+		
+		cd  /kvmfile
+		qemu-img   create  -f  qcow2  -b  stu01.qcow2  stu03.qcow2
+		virsh   dumpxml  centos7  >  stu03.xml
+		vim  stu03.xml（修改虚拟机名称为stu03、UUID删除、磁盘存储路径/kvmfile/stu03.qcow2、删除网卡MAC地址）
+		:wq
+		virsh  define  stu03.xml
+		virsh  start  stu03
+		virsh  list  --all
+		virsh  destroy   stu03
+
+	4）注意事项：
+		模板机的原始盘仅作为备份，平时不使用
+		已经使用原始盘制作过前端盘的原始盘，可以对前端盘进行修改，但不能对原始盘进行修改
+		修改制作过前端盘的原始盘，一般会导致前端盘无法使用，即使可以使用也可能会出现其他问题，规定是：一旦制作前端盘，原始盘不允许修改
+
+	5）guestmount 离线挂载
+		作用：对未运行的虚拟机的磁盘镜像文件挂载到本地访问
+		格式：guestmount   -o   nonempty  -a   磁盘镜像文件   -i   挂载点
+
+		-o   nonompty：当挂载点已存在文件的时候，需要加这个选项（告诉guestmount命令挂载点没有任何文件，直接挂载）
+
+		guestmount  -o  nonempty  -a   /kvmfile/stu02.qcow2  -i  /mnt
+		ls  /mnt
+		cat   /mnt/etc/hosts
+		
+			
+			
+
+			
+		

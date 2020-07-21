@@ -1,0 +1,141 @@
+1、逻辑卷简介
+	1）为什么要用逻辑卷
+		将零散的空间整合到一起，整合小磁盘容量
+		实现分区大小的动态伸缩
+
+		扩展分区（MBR分区模式，不能直接使用）——》逻辑分区（建立在扩展分区之上）
+
+		物理分区（没有使用的分区）——》卷组（不能直接使用，也支持扩容）——》逻辑卷（分区，支持扩容）
+		
+	2）LVM工作方式
+		在分区——》格式化 中间增加一个逻辑层
+		零散空闲存储——》整合的虚拟磁盘——》虚拟的分区
+		物理卷		卷组		逻辑卷
+		pv		vg		lv
+
+	3）LVM管理工具集
+		功能		物理卷管理	卷组管理		逻辑卷管理
+		Scan 扫描		pvscan		vgscan		lvscan
+		Create 创建	pvcreate		vgcreate		lvcreate
+		Display 显示	pvdisplay		vgdisplay		lvdisplay
+		Remove 删除	pvremove	vgremove	lvremove
+		Extend 扩展	/		vgextend		lvextend
+
+2、制作逻辑卷
+	1）LVM快速部署及使用
+		准备至少一个空闲分区（/dev/sdd1）
+		创建卷组：vgcreate  卷组名   空闲分区...
+		创建逻辑卷：lvcreate  -L  逻辑卷大小   -n   逻辑卷名称   卷组名
+
+		删除顺序：先删除逻辑卷，在删除卷组，最后删除物理卷
+		删除逻辑卷：lvremove   /dev/卷组名/逻辑卷名
+		删除卷组：vgremove  卷组名
+		删除物理卷：pvremove   设备分区路径...
+
+3、逻辑卷扩展
+	1）LVM的扩展
+			扩展逻辑卷容量
+			由原有的16GB增加为18GB
+	
+	2）扩展文件系统
+		ext3/ext4：resize2fs  /dev/myvg/nsd01
+		xfs：xfs_growfs  /dev/myvg/nsd02
+
+	3）修改逻辑卷的PE（物理范围大小必须是128K的倍数，而不是2的幂，开始设置的1M ，再去改的时候就不能超过1M）
+		创建卷组的时候修改PE：vgcreate  -s  pe大小   卷组名   物理卷...
+		在已有卷组修改PE大小：vgchange  -s  PE大小  卷组名			
+		创建逻辑卷时指定PE的个数：lvcreate  -l   PE个数   -n   逻辑卷名  卷组名
+		扩展卷组：vgextend   卷组名   空闲分区...
+		扩展逻辑卷的大小：lvextend  -L   +大小   /dev/卷组名/逻辑卷名
+	
+		使用pvs（物理卷）时，如果逻辑卷的大小不是特别大，一个分区设备足以支撑时，在lsblk之后，其他的分区就不会显示lvm标记
+				如果逻辑卷的大小很大的时候，并且用到了所有的pvs，在lsblk查看后就会显示lvm的标记
+
+		案例4：lvcreate -l 40 -n lvswap vgdate
+
+		案例5：vgextend vgnsd /dev/sdd3
+			lvextend -L 15G /dev/vgnsd/lvhome
+
+
+4、RAID级别及特点
+	1）RAID 0，条带模式
+		至少需要两块磁盘进行存储
+		同一个文档分散存放在不同的磁盘
+		并行写入以提高效率
+		冗余性比较低，任何一块磁盘损坏，都会丢失数据
+	
+	2）RAID 1，镜像模式
+		至少需要两块磁盘进行存储
+		一个文件复制成多份，分别写入不同的磁盘
+		写入速度和效率没有任何提升
+		冗余性高一点，允许损坏其中任意一块磁盘
+
+	3）RAID 5，高性价比模式
+		相当于RAID 0和 RAID 1的折中方案
+		至少需要三块磁盘进行存储
+		提高了数据存储的写入效率
+		最多允许损坏其中任意一块磁盘
+		可以通过校验值来恢复数据，提升数据安全和可靠性
+
+	4）RAID 0+1/RAID 1+0   ——》（RAID 10）
+		整合了RAID 0、RAID 1 的优势
+		至少需要4块磁盘
+		并行存取提高效率、镜像写入提高可靠性
+		冗余性比较高，价格昂贵
+		最多允许同时损坏两块磁盘
+	
+	5）RAID阵列的实现方式
+		硬RAID：由RAID控制卡管理阵列
+			主板—》阵列卡—》磁盘—》操作系统—》数据
+		软RAID：由操作系统来管理阵列
+			主板—》磁盘—》操作系统—》RAID软件—》数据
+
+	dellR730   ctrl + R
+
+5、系统故障修复
+	1）破解重置root用户密码
+		1、重启系统，看见菜单栏后按 e 键，找到 Linux16 这一行，末尾添加 rd.break  console=tty0
+		2、按 ctrl + x 启动后，可以进入修复模式
+		3、以可读写的方式重新挂载根，然后就可以对系统进行写的操作了
+			mount  -o  remount,rw  /sysroot
+		4、切换到磁盘下的系统环境
+			chroot  /sysroot 
+		5、将root用户的密码设置成 redhat
+			echo  redhat | passwd  --stdin  root
+		6、重设 SELinux安全标签
+			方式一：touch  /.autorelabel			
+			方式二：vim  /etc/selinux/config
+				SELINUX=disabled
+		7、退出后重启系统，使用新的密码登陆系统
+			exit
+			reboot 
+
+	2）开机自动挂载配置文件
+		现象：因 /etc/fstab 文件内容有误，系统无法正常开机，会自动进入到修复模式
+		解决方法：
+			1、直接输入 root 用户密码
+			2、vim  /etc/fstab
+			3、删除 /etc/fstab 文件内容中自己所写的内容，然后保存退出
+			4、reboot 重启系统
+
+
+
+6、SELinux
+	1）SELinux 概述
+		美国NSA国家安全局主导开发，一套增强的Linux系统安全的强制访问控制体系
+		集成到Linux内核（2.6及以上）中运行
+		RHEL7基于SELinux体系针对用户、进程、目录、和文件提供提供了预设的保护策略，以及管理工具
+
+	2）SELinux 运行级别的切换
+		enforcing		强制模式
+		permissive	宽松模式
+		disabled		彻底禁用
+
+		enforcing和permissive之间可以随意切换，但是只要是和disabled有关的切换，都必须修改配置文件，然后reboot重启后才会生效
+
+		临时切换：setenforce  1|0
+		固定配置（永久设置，重启后生效）：vim  /etc/selinux/config 文件
+						SELINUX=enforcing
+			
+		查看配置：getenforce
+		

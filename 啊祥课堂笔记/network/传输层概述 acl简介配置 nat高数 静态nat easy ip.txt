@@ -1,0 +1,148 @@
+1、传输层概述
+	1）传输层的作用：
+		网络层提供点到点的连接（IP之间的连接）
+		传输层提供端到端的连接（IP+端口的连接）
+	
+	2）TCP协议
+		TCP概述：传输控制协议、可靠的、面向连接的、传输效率低
+
+		TCP三次握手：（建立连接）
+			客户端发送请求给服务端，请求连接（SYN）——>
+			服务端收到请求后，确定接受请求（ACK），并也向客户端发送了一个请求连接（SYN）——>
+			客户端收到后，确认接受请求（ACK）
+	
+		TCP四次断开：（断开连接）
+			客户端给服务端发送请求断开连接（FIN）——>
+			服务器确认断开请求（ACK）——>
+			服务器也给客户端发送请求断开连接（FIN）——>
+			客户端确认断开连接（ACK）
+
+		TCP的常见应用：
+			FTP（21）：文件传输协议，用于上传下载
+			SSH（22）：用于远程登陆，管理网络设备
+			SMTP（25）：简单邮件传输协议，用于发送邮件
+			DNS（53）：域名服务
+			HTTP（80）：超文本传输协议
+			HTTPS（443）：超文本传输协议，附带安全加密功能
+	
+	3）UDP协议
+		UDP概述：用户数据报协议、不可靠的、无连接的、传输效率高
+		
+		UDP常见应用：
+			TFTP（69）：简单文件传输协议
+			DNS（53）：域名服务
+			NTP（123）：网络时间协议
+
+
+2、基本ACL
+	1）ACL的作用：
+		访问控制列表是应用在路由器接口的指令列表（即规则）
+		读取第三层、第四层报文头信息
+		根据预先定好的规则对报文进行过滤
+
+	2）ACL的主要类型：
+		基本ACL	2000~2999	匹配源IP地址
+		高级ACL	3000~3999	匹配IP地址、目的IP地址、端口、协议
+
+	3）ACL规则：每个ACL可以包含多个规则，路由器根据规则对数据流量进行过滤，匹配即停止	
+
+	4）案例1配置（全网互通的状态下）：
+		[Huawei] acl 2000
+		[Huawei-acl-basic-2000] rule deny source 192.168.2.1 0
+		[Huawei-acl-basic-2000] quit
+		[Huawei] interface g0/0/1
+		[Huawei-GigabitEthernet0/0/1]traffic-filter inbound acl 2000
+
+	5）案例2配置（接着案例1配置）
+		[Huawei] acl 2000
+		[Huawei-acl-basic-2000] undo rule 5
+		[Huawei-acl-basic-2000]rule permit source 192.168.2.1 0
+		[Huawei-acl-basic-2000]rule deny source any
+
+	6）查看设备的ACL策略
+		[Huawei] display acl 2000
+		[Huawei] display acl all
+
+
+3、高级ACL配置
+	1）案例3配置（接着案例2的配置）
+		[Huawei] undo acl 2000
+		[Huawei] interface GigabitEthernet 0/0/1
+		[Huawei-GigabitEthernet0/0/1] undo traffic-filter inbound 
+		[Huawei-GigabitEthernet0/0/1] quit
+		[Huawei] acl 3000	
+		[Huawei-acl-adv-3000] rule deny tcp source 192.168.2.1 0 destination 192.168.1.1 0 destination-port eq 21
+		[Huawei-acl-adv-3000] rule deny tcp source 192.168.2.2 0 destination 192.168.1.1 0 destination-port eq 80
+		[Huawei-acl-adv-3000] quit
+		[Huawei] interface GigabitEthernet 0/0/1	
+		[Huawei-GigabitEthernet0/0/1] traffic-filter inbound  acl 3000
+
+	2）禁止一个网段的IP（禁止2网段所有的IP访问1.1服务器的www服务）
+		反掩码中：0代表匹配，255代表不匹配
+		[Huawei-acl-adv-3000] rule deny tcp source 192.168.2.2 0.0.0.255 destination 192.168.1.1 0 destination-port eq 80	
+
+
+	3）rule deny ip source
+		IP代表TCP+UDP的所有服务（比如HTTP、FTP、TFTP......）
+
+
+4、NAT概述 （外网接口上配置）
+	1）NAT的作用
+		通过将内部网络的私有地址转换成全球唯一的公网IP地址，使内部网络可以连接到外部网络
+
+	2）私有IP地址分类
+		A类：10.0.0.0~10.255.255.255
+		B类：172.16.0.0~172.31.255.255
+		C类：192.168.0.0~192.168.255.255
+
+	3）NAT的优点
+		节省公有合法IP地址
+		处理地址重叠
+		提升安全性		
+		
+	4）NAT的缺点
+		延迟增大
+		配置和维护的复杂性
+		
+	5）实现NAT的方式
+		静态转换
+		Easy IP
+
+5、静态NAT
+	1）静态NAT概述   （用于服务器发布到外网使用）
+		静态转换是指将内部网络的私有地址装化为共有地址时，IP地址的对应关系是确定的
+		静态转换是一对一的转换
+		静态转换是双向的
+
+	2）配置方式
+		进入接口
+		nat  static  global  200.1.1.11  inside  192.168.1.1			##192.168.1.1在访问外网时，将地址转化为200.1.1.11后再访问外网
+		
+	3）案例4配置
+		[Huawei] interface GigabitEthernet 0/0/0	
+		[Huawei-GigabitEthernet0/0/0] ip address 192.168.2.254 24	
+		[Huawei-GigabitEthernet0/0/0] in g0/0/1
+		[Huawei-GigabitEthernet0/0/1] ip address 100.0.0.1 8	
+		[Huawei-GigabitEthernet0/0/1] nat static global 100.0.0.2 inside 192.168.2.1
+		[Huawei-GigabitEthernet0/0/1] nat static global 100.0.0.3 inside 192.168.2.2
+		[Huawei-GigabitEthernet0/0/1] ip route-static 0.0.0.0 0 100.0.0.10
+
+
+6、Easy IP     （仅仅需要访问公网的时候使用，比如办公室环境）
+	1）Easy IP概述
+		Easy IP允许将多个内部地址映射到网关出接口
+		Easy IP是多对一的转换
+		Easy IP是单向的
+
+	2）案例4配置
+		[Huawei] in g0/0/1
+		[Huawei-GigabitEthernet0/0/1] 
+		[Huawei-GigabitEthernet0/0/1] undo nat static global 100.0.0.2 inside 192.168.2.1
+		[Huawei-GigabitEthernet0/0/1] undo nat static global 100.0.0.3 inside 192.168.2.2
+		[Huawei-GigabitEthernet0/0/1] quit
+		[Huawei] acl 2000
+		[Huawei-acl-basic-2000] rule permit source 192.168.2.0 0.0.0.255
+		[Huawei-acl-basic-2000] rule permit source any
+		[Huawei-acl-basic-2000] in g0/0/1
+		[Huawei-GigabitEthernet0/0/1] nat outbound 2000
+

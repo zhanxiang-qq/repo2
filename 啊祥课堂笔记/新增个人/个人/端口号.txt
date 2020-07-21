@@ -1,0 +1,53 @@
+16位长度
+
+1024以下是系统保留的，从1024-65535是用户使用的
+
+
+dhcp   67
+ftp（文件传输协议）20/21
+
+sftp（安全文件传输协议）115
+
+tftp（udp简单文件传输协议）69
+
+ssh（安全登录）22
+
+telnet（远程登录）23
+
+smtp（邮件传输协议）25
+
+pop3（邮件协议3）110
+
+DNS 53
+
+http 80
+
+https（安全超文件传输协议） 443
+
+rpcbind  111
+
+nfs 2049
+
+ntp（网络时间协议） 123
+
+snmp（简单网络管理协议） 161
+
+imap（互联网消息存取协议） 143
+
+rsync（rsync文件传输服务） 873
+
+mysql 3306
+
+Oracle 1521
+
+tomcat 8080
+
+window远程终端 3389
+
+qq客户端 4000
+
+zabbix server  10051
+
+zabbix agent  10050
+
+PHP-FPM：9000/TCP

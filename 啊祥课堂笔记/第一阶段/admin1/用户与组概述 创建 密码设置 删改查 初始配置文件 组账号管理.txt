@@ -1,0 +1,166 @@
+1、用户与组管理
+	1）基于账户身份对资源访问进行控制
+		账户类别：用户账号、组账号
+		识别方式：UID、GID
+	
+	2）用户账号
+		超级用户root、系统用户、普通用户
+	
+	3）组账号
+		基本组（私有组）
+		附加组（公共组、从属组）
+	
+	4）解析用户账户文件
+		/etc/passwd，保护用户账号的基本信息
+		每个用户都会记录一行，以：分割为7个字段
+		root:x:0:0:root:/root:/bin/bash
+		用户名：密码或密码占位符x：用户UID号：用户GID号：用户描述信息：家目录：登陆解释器
+
+2、用户账号创建
+	1）添加用户
+		格式：useradd   [选项]...    用户名
+		常用选项：
+			-u   用户id
+			-d   家目录路径
+			-s   登陆解释器程序
+			-G  附加组
+			-g  基本组
+
+		例如：useradd  -u  1234  nsd01
+		          useradd  -d   /opt/nsd02   nsd02
+		          useradd  -s   /sbin/nologin   nsd03
+		          useradd  -g  nsd01  nsd04
+		          useradd  -G  nsd02  nsd05
+
+	2）查看用户是否创建成功
+		格式1：id   用户名
+			
+		格式2：grep  "用户名"   /etc/passwd
+
+	3）创建组
+		格式：groupadd   组名
+
+3、用户密码设置
+	1）设置用户登陆密码
+		格式1：passwd   [用户名]
+		格式2：echo   '密码'   |   passwd  --stdin  用户名
+
+	2）/etc/shadow，存放密码信息的文件
+		每个用户记录一行，以：分割为9个字段
+		root:$6$k97...BdWaDbGBJYn1:18226:0:99999:7:::
+			用户名
+			加密后的密码字符串
+			上次修改密码的时间
+			密码的最短有效时间，默认0
+			密码的最长有效天数，默认99999
+			密码过期前的警告天数，默认7
+			密码过期够多少天禁用此用户账号
+			账号失效时间，默认值为空
+			保留字段（未使用）
+
+
+4、用户删改查
+	1）修改用户属性
+		使用usermod命令
+			usermod   [选项]...   用户名
+		常用命令选项
+			-u   用户id
+			-d   家目录路径
+			-s   登陆shell
+			-G  附加组（重置附加组）
+			-g   基本组
+
+	2）检查用户ID信息
+		使用id命令
+			id   用户名
+		
+	3）删除用户
+		使用userdel命令
+			userdel   [-r]   用户名
+
+5、用户初始配置文件
+	1）配置文件来源
+		新建用户时，根据 /etc/skel 模板目录复制
+	
+	2）主要的初始配置文件
+		~/.bash_profile		每次登陆时执行
+		~/.bashrc			每次进入新的Bash环境时执行
+		~/.bash_logout		每次退出登陆时执行
+
+		全局配置文件：/etc/bashrc、/etc/profile
+
+		/root/.bashrc	/home/nsd01/.bashrc	/etc/bashrc
+
+6、组账号管理
+	1）添加组（组基本信息存放在 /etc/group 文件）
+		使用 groupadd 命令
+			groupadd   [-g  组ID]   组名
+
+	2）管理组成员（组成员信息存放在 /etc/gshadow 文件）
+		使用gpasswd命令
+			gpasswd  -a   用户名   组名
+			gpasswd  -d   用户名   组名
+	
+	3）删除组
+		使用 groupdel 命令
+			groupdel  组名
+
+
+
+
+1、Linux系统账户中，有哪些账户类别，如何进行识别？
+2、/etc/passwd文件中，用户信息被分割成7个字段，每个字段的意思分别是什么
+3、创建一个名为admin01的用户账号？
+	useradd admin01
+4、使用id命令查看admin01用户的信息？
+	id admin01
+5、查看admin01的家目录？
+	ls  /home/admin01
+6、新建普通用户admin02，家目录位于/opt/admin02
+	useradd -d  /opt/admin02  admin02
+7、新建普通用户admin03，将其UID设置成4567，将其登陆的shell设置成/sbin/nologin
+	useradd -u 4567 -s /sbin/nologin admin03
+8、新建普通用户admin04，将其基本组设置为admin01，附加组设为admin02、admin03、root
+	useradd -g admin01 -G admin02,admin03,root admin04
+9、创建admin05用户，将其家目录设置成/opt/admin05，将其UID设置成3000，将其登陆的shell修改为/sbin/nologin，将其基本组设置成root，附加组设置成admin03、admin04
+	useradd  -d  /opt/admin05  -u  3000  -s  /sbin/nologin  -g  root   -G admin03,admin04  admin05
+10、给admin01用户设置一个密码：12345679
+	echo 12345679  |  passwd --stdin  admin01
+	passwd  admin01
+11、过滤/etc/shadow文件中包含admin01的内容
+	grep  admin01  /etc/group
+12、为用户admin02设置登陆的密码，然后注销后测试是否能够登陆
+	
+13、交互式的给admin03用户设置密码12345679
+	passwd  admin03
+14、非交互式给admin05设置密码tarena
+	echo tarena  |  passwd --stdin  admin05
+
+
+
+1、以下修改用户属性的选项分别是什么意思？
+	-u
+	-G
+	-g
+	-d
+	-s
+2、删除用户的时候如何连同用户的家目录一块删除？
+3、新建用户时，用户家目录的文件是由那个模板文件产生的？
+4、每次用户登录时，会执行哪个文件？
+5、每次用户退出登陆时，会执行哪个文件？
+6、/root/.bashrc、/home/nsd01/.bashrc、/etc/bashrc这几个文件有什么区别？
+7、添加一个组需要用什么命令？
+8、组的基本信息存放在那个路径下的文件，文件内容的字段分别有什么含义？
+9、组成员信息存放在那个路径下的文件？
+10、如何将成员添加进组，如何将成员从组中剔除，请写出命令格式？
+11、如何使用命令删除一个组，请写出命令格式？
+12、创建用户harry01，把登陆的解释器修改为/sbin/nologin？
+13、创建用户harry02，把家目录路径修改为/opt/harry02，然后查看/opt/harry2 ？
+14、创建用户harry03，把用户的UID修改成5000 ？
+15、创建用户harry04，把用户的基本组修改成root ?
+16、创建用户harry05，将harry01、harry02设置成harry05的附加组？
+17、创建用户harry06，将用户的解释器修改成/sbin/nologin，家目录修改为/opt/harry06，UID修改成6000，基本组修改成root，将harry03和harry04设置成harry06的附加组？
+18、添加一个adminuser组，组ID是3333 ？
+19、将用户harry01和harry02加入adminuser组？
+20、将harry01和harry02用户从adminuser组中移除？
+21、删除adminuser组？

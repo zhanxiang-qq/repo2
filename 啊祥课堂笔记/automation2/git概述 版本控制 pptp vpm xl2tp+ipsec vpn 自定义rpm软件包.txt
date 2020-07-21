@@ -1,0 +1,191 @@
+3、Git 版本控制（下）
+	1）HEAD 指针是一个可以在任何分支和任何版本移动的指针
+		通过移动指针我们可以将数据还原至任何版本
+		当前HEAD指针为HEAD@{0}
+		可以使用 git  reflog 查看当前指针
+		git  log  --oneline
+		
+		移动指针：
+			git  reset  --hard  301c0	##获取301c0这版本的数据
+			git  reset  --hard  04ddc	##回到最后一次修改的版本
+
+	2）分支
+		分支可以让开发分多条主线同时进行，每个主线互不影响
+			按功能模块分支、按版本分支
+			分支也可以合并
+		常见分支规范如下：
+			MASTER：主分支，是代码的核心
+			DEVELOP：最新开发成功的分支
+			RELEASE：为发布新产品设置的分支
+			HOTFIX：为了修复软件BUG缺陷的分支
+			FEATURE：为开发新功能设置的分支
+		
+		查看当前分支：
+			git  status
+			git  branch  -v
+		创建分支：
+			git  branch  hotfix
+			git  branch  feature	
+			git  branch  -v
+		切换分支：
+			git  checkout  hotfix
+			git  branch  -v
+			echo  "fix a bug" >> new.txt
+			git  add .
+			git  commit -m "fix a bug"
+		合并分支：
+			git  checkout  master
+			cat new.txt
+			git  merge  hotfix
+		版本冲突：
+			git  checkout  hotfix
+			echo  "AAA" > a.txt
+			git  add  .
+			git  commit  -m  "add  a.txt  by  hotfix"
+			git  checkout  master
+			echo  "BBB"  > a.txt
+			git  add .
+			git  commit  -m  "add  a.txt  by  master"
+			git   merge  hotfix
+
+
+4、PPTP VPN
+	Virtual  Private  Network（虚拟专用网络）
+	在公用网络上建立专用私有网络，进行加密通讯
+	多用于为集团公司的各地子公司建立连接
+	连接完成后，各个地区的子公司可以像局域网一样通讯
+	在企业网络中有广泛应用
+	目前主流的VPN技术（GRE，PPTP，L2TP+IPSec，SSL）
+
+	部署PPTP VPN服务器：
+		cd  /root/lnmp_soft/vpn
+		yum   -y  install  pptpd-1.4.0-2.el7.x86_64.rpm
+		rpm  -qc  pptpd
+		vim  /etc/pptpd.conf
+		localip  192.168.2.100	##服务器本地IP
+		remoteip  172.16.0.1-50	##分配给客户端的IP地址池
+		:wq
+		
+		vim  /etc/ppp/options.pptpd
+		ms-dns  8.8.8.8		##给客户端指定DNS服务器
+		
+		vim  /etc/ppp/chap-secrets
+		wg	*	123456	     *	##设置VPN账户
+			
+		echo  "1"  > /proc/sys/net/ipv4/ip_forward	##开启路由转发功能	
+
+		systemctl  start   pptpd		##启动 pptpd服务
+		iptables  -F
+		setenforce  0
+
+		
+
+5、XL2TP + IPSec  VPN
+	1）概述
+		Layer Two  Tunneling  Protocol（L2TP）
+		L2TP 建立主机之间的VPN隧道，压缩，验证
+		IPSec 提供数据加密、数据校验、访问控制的功能
+		
+		部署XL2TP + IPSec 服务器：
+			yum  -y  install  libreswan
+			yum  -y  install  xl2tpd-1.3.8-2.el7.x86_64.rpm
+			cp  /root/lnmp_soft/vpn/myipsec.conf   /etc/ipsec.d/
+			vim  /etc/ipsec.d/myipsec.conf
+			...
+			left=192.168.2.200				##VPN服务器本机的外网IP地址
+			right=%any				##允许任何客户端连接
+			vim  /etc/ipsec.secrets	
+			192.168.2.200  %any:  PSK  "randpass"		##randpass为预共享密钥，客户端连接时需要输入
+			systemctl  start  ipsec
+			iptables  -F
+			ss  -ntlup  | grep 500	
+			vim  /etc/xl2tp/xl2tp.conf
+			ip  range = 172.16.0.100-172.16.0.150		##分配给客户端的IP池
+			local ip = 192.168.2.200			##VPN服务器的IP地址
+			vim  /etc/ppp/options.xl2tpd
+			require-mschap-v2				##让windows客户端连接时需要输入用户名和密码
+			#crtscts
+			#lock
+			vim  /etc/ppp/chap-secrets
+			wg	*     123456      *			##创建VPN连接的用户和密码
+			systemctl  start  xl2tpd
+			ss  -ntulp  | grep  xl2tpd
+			echo  "1"  >  /proc/sys/net/ipv4/ip_forward
+			iptables  -F
+
+			客户端需要修改注册表：win + R  输入  regedit
+				找到 HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Services\RasMan\Parameters
+				新建DWORD值，名称为 ProhibitIpSec 值为1
+				重启计算机
+		
+
+
+6、自定义RPM软件包
+	1）应用场景
+		官方未提供RPM包
+		官方的RPM包无法自定义
+		大量源码包，希望提供统一的软件管理机制
+
+	2）打包流程
+		准备源码软件
+		安装rpm-build打包工具
+		编写编译配置文件
+		编译源码包
+
+	3）自定义RPM软件包
+		安装 rpm-build：
+			yum  -y  install  rpm-build
+			rpmbuild  -ba  test.spec		##生成rpmbuild目录
+			ls
+		
+		将准备好的源码包复制到rpmbuild子目录：
+			cp   /lnmp_soft/nginx-1.16.1.tar.gz   /root/rpmbuild/SOURCES/
+	
+		编写编译配置文件：
+			vim  /root/rpmbuild/SPECS/nginx.spec
+			Name:nginx			##源码包软件名称
+			Version:1.16.1			##源码包软件的版本号
+			Release:        1%{?dist}		##制作的RPM包版本号
+			Summary:this is a nginx web server	##RPM软件的概述
+			#Group:         			##RPM软件属于的组别
+			License:GPL			##软件的协议
+			URL:www.douniwan.com		##网址
+			Source0:nginx-1.16.1.tar.gz		##源码包文件的全称
+			#BuildRequires: 			##制作RPM时的依赖关系
+			#Requires:			##安装RPM时的依赖关系      
+			%description			
+			nginx is a web server		##软件的详细描述
+			%post
+			useradd wanggang			##创建一个用户
+			echo wanggang > /tmp/wanggang.txt	##创建一个文件
+			%prep
+			%setup -q			##自动解压源码包，并cd进入目录
+			%build
+			./configure			##配置
+			make %{?_smp_mflags}		##编译
+			%install
+			make install DESTDIR=%{buildroot}	##安装
+			%files
+			%doc
+			/usr/local/nginx/*			##需要对哪些文件与目录打包
+			%changelog
+
+		使用spec文件编译RPM包：
+			rpmbuild  -ba  /root/rpmbuild/SPECS/nginx.spec
+			ls   /root/rpmbuild/RPMS/x86
+			
+		安装测试：
+			/usr/local/nginx/sbin/nginx  -s  stop
+			rm  -rf  /usr/local/nginx
+			ls   /usr/local/nginx
+			cd  /root/rpmbuild/RPMS/x86_64
+			yum  -y  install   nginx.1.16.1-1.el7.centos.x86_64.rpm
+			ls  /usr/local/nginx
+			/usr/local/nginx/sbin/nginx
+			ss  -utnlp  | grep  nginx
+			
+		
+		 
+
+
+		

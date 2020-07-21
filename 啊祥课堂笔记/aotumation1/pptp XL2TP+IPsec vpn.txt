@@ -1,0 +1,45 @@
+vpn   virtual  private network 虚拟专用网络 (GRE  PPTP  L2TP+IPSec  SSL)
+一、 pptpd
+  1、部署vpn服务器   安装软件 yum -y install  pptpd-1.4.0-2.el..rpm 存放在lnmp文件中
+  2、rpm -qc 软件包 查询软件的主配置文件
+  3、需要更改的配置文件
+      vim   /etc/pptpd.conf               vim /etc/ppp/options.pptpd   vim/etc/ppp/chap-secrets
+      localip    服务器ip地址                      ms-dns 8.8.8.8                 用户名  服务器 密码 客户端
+      remoteip   分配给客户端的ip池                                                    zx      *    123123    *
+  4、永久配置vpn服务器开启路由功能  vim /etc/sysctl.conf
+             加入：   net.ipv4.ip_forward = 1
+        临时配置vpn服务器的路由功能： echo "1"  > /proc/sys/net/ipv4/ip_forward
+   5、systemctl start pptpd 启动服务  / 关闭防火墙
+
+二、XL2TP（隧道）+IPSec(数据加密)     
+ 1、IPSec 提供数据加密、数据校验、访问控制功能
+      安装软件： yum -y install  libreswan
+                       yum -y install  xl2tpd-1......rpm(存放在lnmp文件的vpn中)
+      配置文件：cp myipsec.conf   /etc/ipsec.d/myipsec.conf  (vpn中)
+                      更改left=vpn服务器本机ip
+                            right=%any  （允许任何客户端连接）
+      新建ipsec预定义共享秘钥：   vim /etc/ipsec.secrets
+                                           服务器主机ip     %any：  PSK  “randpass”
+      启动ipsec服务  systemctl start ipsec    清空防火墙
+                             ss -tuanlp | grep 500
+  2、XL2TP 建立主机之间的vpn隧道、压缩、验证
+      配置文件： rpm -qc xl2tpd  查询配置文件
+      vim  /etc/xl2tpd/xl2tpd.conf
+                 修改 ip range  =    分配客户端的ip地址池
+                        local ip =   服务器ip地址
+      vim /etc/ppp/options.xl2tpd
+             删除  require-mschap-v2 的注释#
+             crtscts    lock  前面加注释或者删除本行
+       vim /etc/ppp/chap-secrets
+              用户名  服务器ip   密码  客户端
+               zx        *            123123     *
+       启动服务： systemctl start xl2tpd
+                 ss  -tuanlp  | grep  xl2tpd 
+                  echo "1"  >  /proc/sys/net/ipv4/ip_forward  清空防火墙
+       widows的bug：
+       win+R  搜索regedit
+            找到 hkey-local-machine/system/currentcontrolset/services/rasman/parameters
+            新建DWord值，名称为ProhibitIpSec   1
+            重启计算机生效
+             
+ 

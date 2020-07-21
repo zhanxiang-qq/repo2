@@ -1,0 +1,36 @@
+git
+ 1、服务器 安装git 创建仓库  mkdir /var/git    git init /var/git/project --bare
+ 2、客服端 git clone root@服务器：仓库文件位置   客户端所有操作必须切换在project下面（工作区）  su -sh 查看文件大小
+      资料非明文存取，找不到 
+  3、git status:查看git状态                      5、将数据推送至远程git服务器     git config --global push.default simple
+       git add . :提交到暂存区    
+  4、将暂存区的修改提交到本地仓库                                                           git push （本地上传到服务器）
+       git config --global user.email "you@example.com"                           git pull （将服务器上的新版本更新到本地数据）
+       git config --global user.name "Your Name"
+       git commit -m "版本的注释信息" 
+ 6、版本更新日志
+       git log    /     git log --pretty --oneline  /     git log --oneline   /      git reflog
+ 7、数据恢复
+   使用git reflog 查看head指针状态
+   git reset --hard  编码号  （跳转到老版本拷贝、但是最后必须要恢复到最新版本）
+8、分支（
+    master 主分支，代码核心                                  查看当前分支：git status 、 git branch -v
+    develop 最新开发成果的分支                                    创建分支：git branch  分支（hotfix  feature）
+    release  发布新产品设置的分支                   创建分支后创建新文件需要在分支上进行 git add . / git commit -m ""
+    hotfix    修复软件bug缺陷分支                        切换与合并分支：git checkout  分支名 
+    feature  开发新功能设置的分支                    （在主分区上进行合并）  git metge   分支名
+9、分支冲突
+    如果分支与主分支都有同样的文件，可以进行git merge 分支，然后vim进行手动更改
+    针对vim更改后的文件需要进行： git add .  / git commit -m "  " 操作 ，最后git push提交到服务器
+10、相关流程图
+                                                  远程的服务器   ------------------》  其他客户端（git pull 更新本地仓库到最新版本）
+                    1、clone到本地仓库                 4、git push 提交到远程服务器
+                                                                               
+                                        本地仓库                     (3、git commit -m " "  提交到本地仓库)       
+                                                                         暂存区（2、git  add  .）
+                                        工作区
+     
+
+
+
+

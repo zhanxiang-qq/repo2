@@ -1,0 +1,242 @@
+1、vim编辑技巧
+	1）光标跳转：
+		上下左右键		上下左右移动光标
+		pgdn、ctrl+f		向下翻动一整页
+		pgup、ctrl+b		向上翻动一整页
+		Home键或^、数字0 	 跳转至首行
+		End键或$键		跳转至行尾
+		1G或gg			跳转至文件的首行
+		G			跳转至文件的尾行	
+		
+	2）复制粘贴：
+		yy、#yy		复制光标处的一行、#yy
+		p、P		粘贴到光标处之后、之前
+		x或Delete键	删除光标处的单个字符
+		dd、#dd		删除光标处的一行或多行
+		d^		从光标处删除至行首
+		d$		从光标处删除到行尾
+
+	3）查找、撤销、保存：
+		/word		向后查找字符"word"
+		?word		向前查找字符串"word"	
+		n、N		跳转至下一个/上一个字符串
+		u		撤销最近的一次操作
+		U		撤销当前行的所有修改
+		ctrl+r		取消前一次撤销操作
+		ZZ		保存文件内容并退出vim编辑器
+
+	4）存盘、退出、文件操作
+		:w		保存当前文件
+		:q!		放弃已有更改后强制退出
+		:wq或:x		保存已有修改后退出
+		:w /root/newfile	另存为其他文件
+		:r /etc/filesystems	读取其他的文件内容
+
+	5）字符串替换：
+		:s /old/new	替换当前行第一个old
+		:s /old/new/g	替换当前行所有的old
+		:n,m s/old/new/g	替换n-m行所有的old
+		:%s /old/new/g	替换文件内所有的old
+		:%s /old/new/gc	替换是加c，每次需用户确认
+
+	6）开关设置：
+		:set  nu|nonu			显示/不显示行号
+		:syntax  on|off			启用/关闭语法高亮
+		:set  hlsearch|nohlsearch		开启/关闭查询结果高亮显示
+		:set  autoindent|noautoindent	启用/关闭缩进
+
+
+2、vim的高级使用
+	1）使用.vimrc配置文件
+		位于用户家目录，可预先设置一些vim参数
+		vim  ~/.vimrc
+		set nu
+		set ai
+		
+		~/.viminfo，记录用户的历史操作
+		.filename.swp，编辑过程中的缓存文件
+	
+	2）可视化选择
+		v	取连续的多个字符
+		V	取连续的多行
+		ctrl + v	取连续的多列
+		gv	重复上次选取
+
+		d	选中后按d可以删除
+		y	选中后按y可以复制
+
+3、准备Yum软件仓库
+	1）yum概述
+		基于RPM构建的软件更新机制
+		自动解决软件包的依赖关系
+		所有软件包由集中的yum软件仓库提供
+
+	2）软件仓库的提供方式
+		本地目录：file://...
+		FTP或HTTP服务：ftp://... 、http://...
+	
+	3）RPM软件包的来源
+		Red Hat发布的RPM包集合
+		第三方、用户自定义的RPM包集合
+
+	
+4、Yum仓库构建
+	1）影响yum使用的主要文件
+		基本设置：/etc/yum.conf
+		仓库配置：/etc/yum.repos.d/*.repo
+		日志文件：/var/log/yum.log
+
+	2）.repo 基本配置项
+		[源名称]		自定义名称，具有唯一性
+		name		本软件源的描述字符
+		baseurl		指定YUM服务端的URL地址
+		enabled		是否启动此频道
+		gpgcheck		是否验证待安装的RPM包
+		gpgkey		用于RPM软件包验证的密钥文件
+
+		vim   /etc/yum.repos.d/dvd.repo
+		[dvd]
+ 	 	name=this is rpm bao
+  		baseurl=file:///mnt
+  		enabled=1
+ 		gpgcheck=0
+
+		排错思路：
+			光盘镜像有没有挂载
+			是否删除/etc/yum.repos.d/目录下的内容
+			创建的配置文件是否以.repo结尾
+			配置文件是否写正确
+			
+
+	3）生成仓库缓存
+		yum   repolist
+
+
+5、Yum命令行工具
+	yum   list   		列出所有包
+	yum   list    [软件名]...	列出指定软件的包
+	yum   search   关键词	查找与关键词相关的软件包
+	yum   info   [软件名]...	查看指定软件的描述信息
+	yum   provides   文件路径...	查看哪些软件能提供	
+
+	yum   [-y]  指令   软件名...
+		常用指令：
+			install	安装指定的软件包，类似于rpm  -i
+			remove	卸载指定软件包，类似于rpm  -e
+	
+	yum  clean  all		清除yum仓库缓存，适用于yum缓存存在错误时
+
+
+6、Shell基础与命令补充
+	1）根-树形目录结构
+		man  hier		查看一级目录的作用
+	
+	2）常见一级目录的用途
+		/boot			存放系统引导必需的文件，包括内核、启动配置
+		/bin、/sbin		存放各种命令程序
+		/dev			存放硬盘、键盘、鼠标、光驱等各种设备文件
+		/etc			存放Linux系统及各种程序的配置文件
+		/root、/home/用户名	分别是管理员目录、普通用户的默认家目录
+		/var			存放日志文件、邮箱目录等经常变化的文件
+		/proc			存放内存中的映射数据，不占用磁盘
+		/tmp			存放系统运行过程中使用的一些临时文件
+
+	3）历史命令
+		history		查看历史命令列表
+		history   -c	清空历史命令
+		!n		执行命令历史中的第n条命令
+		!str		执行最近一次以str开头的历史命令
+
+		vim   /etc/profile
+		HISTSIZE=1000		默认记录1000条
+
+	4）du 命令，统计文件的占用空间
+		du   [选项]...   [目录或文件]...
+		-s	只统计每个参数所占用的总空间大小
+		-h	提供易读容量单位（K，M等）
+		例如：du  -sh   /boot/   /etc/pki/
+
+	5）date，查看/调整系统日期时间
+		date   +%F			只查看年月日
+		date   +%R			查看时和分
+		date   +"%Y-%m-%d  %H:%M:%S"	查看年月日时分秒
+		date   -s   "yyyy-mm-dd  HH:MM:SS"
+
+		例如：date  -s   "2001-12-31  09:30"
+	
+		hwclock  -s	重设系统日期时间
+		
+	6）ln，创建软连接（若原始文件或目录被删除，连接文件将失效，软连接可存放在不同分区/文件系统）
+		软连接 --》原始文档 --》文档数据
+		格式：ln  -s   原始文件或目录   软连接文件
+
+	7）ln，创建硬连接（若原始文件被删除，连接文件仍可用，硬连接与原始文件必须在同一分区/文件系统）
+		硬连接 --》文档数据
+		格式：ln   原始文件   硬连接文件
+
+	8）--help 查看外部命令的帮助信息
+		对于外部命令程序，通常会提供“--help”帮助选项
+		ls   --help
+	
+	9）man，格式化手册阅读工具
+		按 “上” 键、“下” 键、PgUp、PgDn 键滚动及翻页
+		按  q 键退出
+		按  /  键向后查找关键词（n，N切换）
+
+	10）归档+压缩操作，支持跨平台
+		格式：zip  [-r]  备份文件.zip  被归档的文档...
+			-r	压缩目录必须加上-r，文件不用加-r			
+
+		例如：zip  [-r]  /opt/etc_selinux.zip  /etc/selinux/
+		          du  -sh  /opt/etc_selinux.zip  /etc/selinux/
+		
+	11）释放归档+解压操作
+		格式：unzip  备份文件.zip  [-d  目标文件夹]
+		例如：mv  /etc/selinux   /etc/selinux.old
+		          unzip   /opt/etc_selinux.zip   -d  /
+		          ls  -d  /etc/selinux
+
+	12）改变标注输入/输出/错误输出的方向
+		类型			操作符		用途
+		覆盖重定向输出		>		将命令行的正常执行输出覆盖保存到文件
+		追加重定向输出		>>		将命令行的正常执行输出追加保存到文件
+		覆盖重定向错误输出 		2>		将命令行的错误执行输出覆盖保存到文件
+		追加重定向错误输出		2>>		将命令行的错误执行输出追加保存到文件
+		混合重定向		&>		将错误和正确覆盖到同一个文件
+
+
+
+1、复制/etc/passwd文件至/opt/passwd.txt
+2、vim打开/opt/passwd.txt文件，完成以下操作
+	1）切换到最后一行
+	2）切换到第30行
+	3）切换到第一行
+	4）删除第6行
+	5）删除1-5行
+	6）复制第一二行，粘贴到最后一行
+	7）查找全文的root字符串
+	8）将全文的a替换成大写的A
+	9）使用可视化工具给10-20行的行首加上#注释符号
+	10）在vim中显示行号
+3、vim打开/etc/passwd文件，完成以下操作
+	1）关闭文本的高亮显示后再打开高亮显示
+	2）关闭文本的查询结果高亮显示后再打开高亮显示
+	3）启用自动缩进功能
+	
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+	
+
+

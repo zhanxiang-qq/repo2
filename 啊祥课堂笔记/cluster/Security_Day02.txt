@@ -1,0 +1,371 @@
+1、数据抓包
+	1）tcpdump抓包命令
+		命令行抓取数据包的工具
+		基本用法：
+			tcpdump  [选项]  [过滤条件]
+		常见监控选项：
+			-i：指定监控的网络接口
+			-A：转换为ACSII码，以方便阅读
+			-w：将数据包信息保存到指定文件
+			-r：从指定文件读取数据包信息
+			-c：定义抓包个数
+			-nn：不解析域名
+
+		tcpdump的过滤条件：
+			类型：host、net、port、portrange 600-800
+			方向：src、dst
+			协议：tcp、udp、ip、wlan、arp...
+			多个条件组合：and、or、not
+		
+		应用案例：
+			按条件抓取数据包
+			按ctrl + c键停止抓包
+			
+			抓取目标主机4.6的21端口的数据包：
+				tcpdump  -A  dst  host  192.168.4.6  and  tcp  port  21  -i  ens33
+			
+			抓取4.6的ftp服务的数据包：	
+				192.168.4.5上操作：
+					yum  -y  install  tcpdump
+					yum  -y  install  vsftpd
+					systemctl  start  vsftpd
+					tcpdump  -A  host  192.168.4.6  and  tcp  port  22  -i  ens33
+
+				192.168.4.6上操作：
+					yum  -y  install  ftp
+					ftp  192.168.4.5
+					lcd  /mnt			##切换到客户端的/mnt目录
+					get  文件名		##下载文件到/mnt目录
+
+				最后在4.5上查看数据包的情况
+
+				如果想使用root用户登录：
+					vim /etc/vsftpd/user_list 
+					#root
+					:wq
+					vim /etc/vsftpd/ftpusers
+					#root
+					:wq
+					systemctl  restart  vsftpd
+				
+			抓取4.254的http服务的数据包：
+				192.168.4.5上操作：
+					yum  -y  install  gcc  make  pcre-devel  openssl-devel
+					tar  -xf  nginx-1.16.1.tar.gz
+					cd  nginx.1.16.1
+					./configure
+					make  &&  make  install
+					vim  /usr/local/nginx/conf/nginx.conf
+					 server {
+						auth_basic  "passwd";
+						auth_basic_user_file  /usr/local/nginx/pass;
+					}
+					:wq
+					yum  -y  install  httpd-tools
+					htpasswd  -c  /usr/local/nginx/pass  tom
+					/usr/local/nginx/sbin/nginx
+					tcpdump  -A  -w  web.cap  host  192.168.4.254  and  tcp  port  80  -i  ens33
+				192.168.4.254真机上操作：
+					访问：http://192.168.4.5
+					输入用户名和密码进行访问
+
+				192.168.4.5上查看抓包记录：
+					找到编码的文件后
+					echo   编码文件  |   base64  -d
+
+
+
+2、系统审计
+	1）什么是审计：
+		基于事先配置的规则，记录可能发生在系统上的事件
+		审计不会未系统提供额外的安全保护，但他会发现并记录违反安全策略的人及其对应得行为
+		审计能够记录得日志内容：
+			日期与事件、事件结果
+			触发事件的用户
+			所有认证机制得使用都可以被记录，如ssh等
+			对关键数据文件得修改行为等
+
+	2）部署audit
+		yum  -y  install  audit
+		vim  /etc/audit/auditd.conf
+		log_file = /var/log/audit/audit.log	##日志文件
+		:wq
+		systemctl  start  auditd
+		systemctl  enable  auditd
+
+	3）配置审计
+		auditctl  -s			##查看状态
+		auditctl  -l			##查看规则
+		auditctl  -D			##删除所有规则		
+
+		定义临时规则：
+			格式：auditctl  -w  path  -p  permission  -k  key_name
+			path是需要审计的文件或目录
+			权限可以是r,w,x,a，发生变化时就记录到日志（r：读取，w：修改写入，x：执行，a：属性修改，比如所有者所属组）
+			key_name为可选项，方便识别规则生成得特定得日志项
+
+			监控审计/etc/passwd文件是否被人修改或者属性改变：
+				auditctl  -w  /etc/passwd  -p  wa  -k  passwd_change
+
+			监控审计parted命令是否被人执行：
+				auditctl  -w  /usr/sbin/parted  -p  x  -k  parted_partition
+
+		定义永久规则：
+			vim  /etc/audit/rules.d/audit.rules
+			-w  /etc/passwd  -p  wa  -k  passwd_change
+			-w  /usr/sbin/parted  -p  x  -k  parted_partition
+			:wq
+
+	4）动态查看日志信息
+		tailf  /var/log/audit/audit.log  
+
+		type：类型
+		msg：输出时间戳（从1970年1月1日开始）
+		arch=c000003e：代表x86_64（16进制）
+		success=yes/no：代表事件是否成功
+		a0-a3是程序调用时的前4个参数
+		ppid：父进程ID
+		auid：审核用户的id
+		uid，gid：用户与组
+		tty：从哪个终端执行的命令
+		comm：用户在命令行执行的指令
+		exe：实际程序的路径
+		key：管理员定义的策略关键字key
+		type=CWD：用来记录当前工作目录
+		type=PATH（ouid和guid）：对象所有者ID和对象所属组ID
+
+	5）搜索日志内容
+		ausearch命令，该命令会默认搜索/var/log/audit/audit.log
+		ausearch  options -if  file_name可以指定文件名
+
+		ausearch  -k  parted_partition  -i	##搜索日志中和parted有关的记录
+
+
+3、Nginx安全
+	1）删除不需要的模块
+		需要的模块使用--with加载模块
+		不需要的模块使用--without禁用模块
+
+		./configure
+		make  &&  make install
+		vim   /usr/local/nginx/conf/nginx.conf
+		http {
+			autoindex on;
+		}
+		:wq
+		/usr/local/nginx/sbin/nginx
+			
+	2）隐藏Nginx版本号信息
+		mv  /usr/local/nginx/html/index.html  /root
+		vim   /usr/local/nginx/conf/nginx.conf
+		http {
+		...
+		server_tokens  off;
+		}
+		:wq
+		 /usr/local/nginx/sbin/nginx  -s  reload
+
+		真机上访问测试
+
+	3）限制并发访问
+		ngx_http_limit_req_module为默认安装的模块，可以用于限制并发访问
+		
+		语法：limit_req_zone  key  zone=name:size  rate=rate;
+		将客户端IP信息存储名称为one的共享内存，空间为10M
+		1M可以存储8千个IP的信息，10M存8万个主机状态
+		每秒中仅接受1个请求，多余的放入漏斗
+		漏斗超过5个则报错
+
+		vim  /usr/local/nginx/conf/nginx.conf
+		http {
+		limit_req_zone  $binary_remote_addr  zone=one:10m  rate=1r/s;
+			server {
+				listen  80;
+				server_name  localhost;
+				limit_req  zone=one  burst=5;
+			}
+			
+		}
+		:wq
+		/usr/local/nginx/sbin/nginx  -s  reload
+		ab  -c  100  -n  100  http://192.168.4.5/
+
+	4）拒绝非法请求
+		常见HTTP请求方法：
+			GET：请求指定的页面信息，并返回实体主体
+			HEAD：类似于get请求，只不过返回的响应中没有具体的内容，用于获取报头
+			POST：向指定资源提交数据进行处理请求（例如提交表单或者上传数据）
+			DELETE：请求服务器删除指定的页面
+			PUT：向服务器特定位置上传资料
+
+		禁用其他方法，仅允许GET和POST
+		vim  /usr/local/nginx/conf/nginx.conf
+		http {
+			server {
+				listen  80;
+				if ($request_method  !~  ^(GET|POST)$) {
+					return 444;
+				}
+			}
+		}
+		:wq
+		/usr/local/nginx/sbin/nginx  -s  reload
+
+		curl  -i  -X  GET  http://192.168.4.5		##-i指定获取请求头信息，-X指定使用GET方法请求
+		curl  -i  -X  HEAD  http://192.168.4.5
+
+	5）防止buffer溢出
+		客户端通过POST发送数据过来，如果服务器内存缓存不下客户端发送的数据，数据就会溢出，导致客户端请求失败，所以这里主要就是为了防止客户端的请求数据溢出，导致访问失败
+		有效降低机器Dos攻击风险（缓存区数据溢出属于DOS攻击中的一种）
+		vim  /usr/local/nginx/conf/nginx.conf
+		http {
+		client_body_buffer_size  1k;		##缓存用户的数据信息的默认容量
+		client_header_buffer_size  1k;		##缓存用户的头部信息的默认容量
+		client_max_buffer_size  16k;		##缓存用户的数据信息的最大容量
+		large_client_buffer_buffers  4  4k;	##缓存用户的头部信息的最大容量
+		}
+		
+
+
+4、数据库安全
+	1）数据库初始化安全脚本
+		yum  -y  install  mariadb-server
+		systemctl  start  mariadb
+		mysql_secure_installation					##执行初始化安全脚本
+		Enter current password for root (enter for none):  Enter		##输入旧密码，旧密码为空，直接输入回车
+		Change the root password? [Y/n]  y				##是否需要修改root密码
+		New password:  123					##新密码是123
+		Re-enter new password:   123					##确认新密码是123
+		Remove anonymous users? [Y/n]  y				##是否删除匿名账户
+		Disallow root login remotely? [Y/n]  y				##是否禁止使用root用户远程登录数据库
+		Remove test database and access to it? [Y/n]  y			##是否删除测试数据库
+		Reload privilege tables now? [Y/n]  y				##是否刷新权限
+
+	
+	2）密码安全，修改mariadb密码的若干方法
+		mysqladmin  -uroot  -p123  password  'mysql'			##命令行修改密码的方式
+		
+		mysql  -uroot  -pmysql					##数据库中修改密码
+		set  password  for  root@'localhost'=password('123');
+		select  user,host,password  from  mysql.user;
+
+		消除密码历史记录：
+			history
+			history  -c
+			echo  >  /root/.bash_history
+			cat  /root/.mysql_history
+			echo  >  /root/.mysql_history
+
+			解决方案：
+				管理好自己的历史，不是用明文登录，选择合适的版本
+				日志，行为审计
+				防火墙从TCP层设置ACL（禁止从外网接触数据库）
+
+	3）数据备份与还原
+		mysqldump  -uroot  -p123  mysql  user  >  user.sql		##备份表
+		mysqldump  -uroot  -p123  mysql  >  mysql.sql			##备份库
+		mysqldump  -uroot  -p123  --all-databases  >  all.sql		##备份所有库
+
+		mysql  -uroot  -p123  mysql  <  user.sql			##还原表
+		mysql  -uroot  -p123  mysql  <  mysql.sql			##还原库
+		mysql  -uroot  -p123  <  all.sql				##还原所有库
+
+	4）数据安全
+		创建可以远程登录的账户
+			mysql  -uroot  -p123
+			grant  all  on  *.*  to  tom@'%'  identified  by  '123';
+			192.168.4.5上抓包：			
+				tcpdump  -A  -i  ens33  tcp  port  3306
+			192.168.4.6上使用tom用户远程登录4.5数据库
+				yum  -y  install  mariadb
+				mysql  -h192.168.4.5  -utom  -p123
+				select  user,host,password  from  mysql.user;
+			
+
+
+5、diff文档数据对比
+	1）diff逐行比较数据
+		diff的原则：告诉我们怎么修改第一个文件后能得到第二个文件
+		选项：
+			-u：输出统一内容的头部信息（打补丁使用）
+			-r：递归对比目录中的所有资源（可以对比目录）
+			-a：所有文件视为文本（包括二进制程序）
+			-N：无文件视为空文件（空文件怎么变成第二个文件）
+		
+	2）diff 文件对比
+		vim  test1.sh
+		#!/bin/bash
+		echo  "hello  wrld"
+		:wq
+		
+		vim  test2.sh
+		#!/bin/bash
+		echo  "hello  the  world"
+		echo  "test  file"
+		:wq
+
+		diff  -u  test1.sh  test2.sh		##对比test1和test2文件的内容，并告诉我们怎么修改test1内容后能得到test2一样的内容
+
+	2）diff 目录对比
+		mkdir  source1 source2
+		echo  "hello  world"  >  source1/test.txt
+		echo  "hello  the  wordl"  >  source2/test.txt
+		echo  "test"  >  source2/tmp.txt
+		cp  /bin/find  source1/
+		cp  /bin/find  source2/
+		echo   "1"  >>  source2/find
+		yum  -y  install  tree
+		tree  source1/
+		tree  source2/
+		diff  -u  source1/  source2/		##仅对比文件
+		diff  -ua  source1/  source2/		##对比文件和程序
+		diff  -Nua  source1/  source2/	##对比所有文件，包括空文件
+
+
+
+6、patch打补丁
+	1）给文件生成补丁
+		mkdir  demo
+		cd  demo
+		vim  test1.sh
+		#!/bin/bash
+		echo  "hello  wold"
+		echo  "test"
+		:wq
+		
+		vim  test2.sh
+		#!/bin/bash
+		echo  "hello  the  world"
+		echo  "test  file"
+		:wq
+
+		diff   -Nua  test1.sh  test2.sh  >  test.patch	##使用diff命令对比文件的差异后生成补丁文件
+		yum  -y  install  patch			##安装打补丁的工具
+		patch  -p0  <  test.patch			##打补丁修复test1，让test1的内容变得和test2一样	
+		patch  -RE  <  test.patch			##-R反向修复，-E修复后如果文件为空，则删除该文件
+
+	2）在不同的目录生成补丁文件
+		cd  /root
+		diff  -Nura  demo/test1.sh  demo/test2.sh  >  test.patch		##在demo的同级目录下生成补丁文件
+		cat  test.patch
+		patch  -p0  <  test.patch					##在demo外使用补丁修复数据
+		patch  -RE  <  test.patch					##反向修复，还原数据
+		cd  demo							##进入demo目录
+		patch  -p1  <  ../test.patch					##在demo内使用补丁修复数据
+
+	3）给目录生成补丁，然后恢复数据
+		cd  /root/demo
+		rm  -rf  *
+		mkdir   source1  source2
+		echo  "hello  world"  >  source1/test.txt
+		echo  "hello  the  wordl"  >  source2/test.txt
+		echo  "test"  >  source2/tmp.txt
+		cp  /bin/find  source1/
+		cp  /bin/find  source2/
+		echo   "1"  >>  source2/find
+		diff  -Nuar  source1/  source2/  >  source.patch			##使用diff生成补丁文件
+		ls
+		cd  source1
+		patch  -p1  <  ../source.patch					##进入source1目录，对source1打补丁，修复数据
+					
+			

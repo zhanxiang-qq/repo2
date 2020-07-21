@@ -1,0 +1,23 @@
+session与 cookie
+    1、先部署lnmp服务器,动静分离   2、拷贝php-memcached-demo，存放在、lnmp_soft/php_scripts(脚本) 
+3、session文件存放在 var/lib/php/sessiom。
+     4、线上测试： ip/index.php     5、所需要软件： mariadb mariadb-devel mariadb-server  php php-fpm php-mysql   nginx
+二、网站重复登录问题
+    1、配置lnmp代理服务器   2、修改集群主机的颜色等属性（index.php home.php  <body bgcolor=颜色>）
+ 3、通过访问代理服务器测试重复登录效果
+三、session 共享 （通过memcached数据库方式实现session的共享功能）
+    1、默认服务器的session回话文件保存到本机某个目录下，部署web集群导致session无法共享。以至网站出现重复登录问题
+    2、 需要扩展包 php-pecl-memcache   php-mysql
+    3、代理服务器 proxy  安装memcached  配置文件 /etc/sysconfig/memcached
+                     启动文件 /usr/lib/systemd/system/memcached.service
+    4、修改集群主机的配置文件链接到代理服务器/etc/php-fpm.d/www.conf   
+（修改php配置，将用户登录信息保存到共享的memcache的数据库中）
+      修改内容：php_value= memcache   "tcp://192.168.1.5:11211"   重启服务 php-fpm
+
+  
+
+
+
+   
+   
+
